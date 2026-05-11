@@ -8,6 +8,7 @@ A relational database for managing a fitness center — memberships, classes, tr
 
 - [Overview](#overview)
 - [ER Diagram](#er-diagram)
+- [Enums](#enums)
 - [Key Design Decisions](#key-design-decisions)
 - [Known Constraints & Limitations](#known-constraints--limitations)
 
@@ -15,6 +16,25 @@ A relational database for managing a fitness center — memberships, classes, tr
 ## ER Diagram
 ### [dbdiagram](https://dbdiagram.io/d/Fitness-Center-69fdce9f54a51d93d3cef0a1)
 ###[diagram with mvp/final version tables color separation](docs/ER_Diagram.png)
+
+---
+## Enums
+
+The database uses `ENUM` types instead of plain `VARCHAR` for columns with a fixed set of allowed values. This enforces data integrity at the database level — invalid values like `'dailyy'` or `'cancelled'` (wrong case) are rejected on insert.
+
+| Enum | Values | Used by |
+|---|---|---|
+| `recurrence_frequency` | `daily`, `weekly`, `monthly` | `class_recurrence_rules.frequency` |
+| `day_of_week` | `MON`, `TUE`, `WED`, `THU`, `FRI`, `SAT`, `SUN` | `rule_week_days.day_of_week` |
+| `work_day_of_week` | `Monday` .. `Sunday` | `trainer_work_schedule.day_of_week` |
+| `class_schedule_status` | `Scheduled`, `Cancelled`, `Completed` | `class_schedule.status` |
+| `attendance_status` | `Booked`, `Attended`, `No-show`, `Cancelled` | `attendance.status` |
+| `membership_type` | `monthly`, `yearly`, `premium` | `memberships.type` |
+| `leave_type` | `Sick`, `Vacation`, `Personal` | `trainer_leaves.leave_type` |
+| `leave_status` | `Pending`, `Approved`, `Rejected` | `trainer_leaves.status` |
+| `equipment_status` | `Available`, `Under Repair`, `Broken` | `equipment.status` |
+| `goal_status` | `In Progress`, `Completed`, `Abandoned` | `goals.status` |
+| `personal_training_status` | `Scheduled`, `Completed`, `Cancelled` | `personal_training.status` |
 
 ---
 ## Overview
@@ -92,7 +112,7 @@ Defines available membership products. **Prices are versioned by inserting new r
 | Column | Type | Notes |
 |---|---|---|
 | `membership_id` | integer | Primary key |
-| `type` | varchar | e.g. `'monthly'`, `'yearly'`, `'premium'` |
+| `type` | membership_type | `'monthly'`, `'yearly'`, `'premium'` |
 | `price` | decimal | Required |
 | `currency` | varchar | Required — e.g. `'PLN'`, `'EUR'`, `'USD'` |
 | `valid_from` | date | Required — when this price version became active |
@@ -150,7 +170,7 @@ Defines a repeating assignment: a specific trainer runs a specific class in a sp
 | `class_id` | integer | FK → `class_templates` |
 | `trainer_id` | integer | FK → `trainers` |
 | `room_id` | integer | FK → `rooms` |
-| `frequency` | varchar | `'daily'`, `'weekly'`, or `'monthly'` |
+| `frequency` | recurrence_frequency | `'daily'`, `'weekly'`, or `'monthly'` |
 | `start_time` | time | Time of day the class starts |
 | `start_date` | date | First date the rule is active |
 | `end_date` | date | Last date the rule is active |
@@ -160,22 +180,22 @@ Stores the days of the week for weekly recurrence rules. One row per day per rul
 
 | Column | Type | Notes |
 |---|---|---|
-| `rule_id` | integer | FK → `class_recurrence_rules` (cascade delete) |
-| `day_of_week` | varchar | `'MON'`, `'TUE'`, `'WED'`, `'THU'`, `'FRI'`, `'SAT'`, `'SUN'` |
-| *(composite PK)* | | `(rule_id, day_of_week)` |
+| `rule_id` | integer | FK → `class_recurrence_rules`, not null |
+| `day_of_week` | day_of_week | `'MON'`, `'TUE'`, `'WED'`, `'THU'`, `'FRI'`, `'SAT'`, `'SUN'`, not null |
+| *(composite PK)* | | `(rule_id, day_of_week)` — guarantees a day cannot be added twice for the same rule |
 
-A class running on Monday and Wednesday has two rows pointing to the same `rule_id` — one for `MON`, one for `WED`. This makes day-based queries clean and indexed, and naturally supports any number of days per rule.
+A class running on Monday and Wednesday has two rows pointing to the same `rule_id` — one for `MON`, one for `WED`. The composite primary key prevents duplicate days per rule, makes day-based queries clean and indexed, and naturally supports any number of days per rule.
 
 ### `rule_month_days`
 Stores the days of the month for monthly recurrence rules. One row per day per rule. Only populated when `frequency = 'monthly'`.
 
 | Column | Type | Notes |
 |---|---|---|
-| `rule_id` | integer | FK → `class_recurrence_rules` (cascade delete) |
-| `day_of_month` | varchar | Day number, e.g. `'1'`, `'15'`, `'28'` |
-| *(composite PK)* | | `(rule_id, day_of_month)` |
+| `rule_id` | integer | FK → `class_recurrence_rules`, not null |
+| `day_of_month` | varchar | Day number, e.g. `'1'`, `'15'`, `'28'`, not null |
+| *(composite PK)* | | `(rule_id, day_of_month)` — guarantees a day cannot be added twice for the same rule |
 
-Using a separate table (rather than a single integer on the rule) means a monthly class can run on multiple days per month — e.g. the 1st and the 15th — with no schema change.
+Using a separate table (rather than a single integer on the rule) means a monthly class can run on multiple days per month — e.g. the 1st and the 15th — with no schema change. The composite primary key prevents duplicate day entries per rule.
 
 ### `class_schedule`
 Materialized individual calendar sessions generated from recurrence rules by a background job. Once generated, each session can be modified independently without touching the master rule — this is where cancellations and substitutions are recorded.
@@ -189,7 +209,7 @@ Materialized individual calendar sessions generated from recurrence rules by a b
 | `room_id`           | integer   | FK → `rooms` — may differ from rule if room changed                  |
 | `start_datetime`    | timestamp |                                                                      |
 | `end_datetime`      | timestamp |                                                                      |
-| `status`            | varchar   | `'Scheduled'`, `'Cancelled'`, `'Completed'`                          |
+| `status`            | class_schedule_status | `'Scheduled'`, `'Cancelled'`, `'Completed'`                 |
 
 **Design note:** `class_id`, `trainer_id`, and `room_id` are duplicated from the rule intentionally. They normally match the rule, but can differ when a session is modified (e.g. substitute trainer, room change).
 
@@ -202,7 +222,7 @@ Records each member's booking or presence at a specific session.
 | `member_id`         | integer   | FK → `members`                                       |
 | `class_schedule_id` | integer   | FK → `class_schedule`                                |
 | `check_in_time`     | timestamp | `NULL` until the member physically checks in         |
-| `status`            | varchar   | `'Booked'`, `'Attended'`, `'No-show'`, `'Cancelled'` |
+| `status`            | attendance_status | `'Booked'`, `'Attended'`, `'No-show'`, `'Cancelled'` |
 
 ---
 
@@ -224,7 +244,7 @@ Fitness equipment in the gym. Not directly tied to scheduling — used for maint
 | ------------------ | ------- | ------------------------------------------- |
 | `equipment_id`     | integer | Primary key                                 |
 | `name`             | varchar | Required                                    |
-| `status`           | varchar | `'Available'`, `'Under Repair'`, `'Broken'` |
+| `status`           | equipment_status | `'Available'`, `'Under Repair'`, `'Broken'` |
 | `last_maintenance` | date    | Date of last service                        |
 
 ---
@@ -255,7 +275,7 @@ Defines the regular weekly working hours for a trainer. Used by the application 
 | ------------------ | ------- | ----------------------------------------------- |
 | `work_schedule_id` | integer | Primary key                                     |
 | `trainer_id`       | integer | FK → `trainers`                                 |
-| `day_of_week`      | varchar | e.g. `'Monday'`                                 |
+| `day_of_week`      | work_day_of_week | e.g. `'Monday'`                          |
 | `start_time`       | time    |                                                 |
 | `end_time`         | time    |                                                 |
 | `is_active`        | boolean | Allows disabling a day without deleting the row |
@@ -267,10 +287,10 @@ Leave requests for trainers. The application should cross-reference this table w
 |---|---|---|
 | `leave_id` | integer | Primary key |
 | `trainer_id` | integer | FK → `trainers` |
-| `leave_type` | varchar | `'Sick'`, `'Vacation'`, `'Personal'` |
+| `leave_type` | leave_type | `'Sick'`, `'Vacation'`, `'Personal'` |
 | `start_date` | date | |
 | `end_date` | date | |
-| `status` | varchar | `'Pending'`, `'Approved'`, `'Rejected'` |
+| `status` | leave_status | `'Pending'`, `'Approved'`, `'Rejected'` |
 | `notes` | text | Optional |
 
 ---
@@ -287,7 +307,7 @@ A fitness goal set by a member. Goals are deliberately flexible — `target_valu
 | `goal_description` | varchar | Human-readable description |
 | `target_value` | varchar | The target to reach |
 | `deadline` | date | Optional target date |
-| `status` | varchar | e.g. `'In Progress'`, `'Completed'`, `'Abandoned'` |
+| `status` | goal_status | `'In Progress'`, `'Completed'`, `'Abandoned'` |
 | `created_at` | timestamp | Defaults to `now()` |
 
 ### `progress`
@@ -314,7 +334,7 @@ One-on-one sessions between a member and a trainer, booked outside the group cla
 | `member_id` | integer | FK → `members` |
 | `trainer_id` | integer | FK → `trainers` |
 | `training_date` | timestamp | |
-| `status` | varchar | e.g. `'Scheduled'`, `'Completed'`, `'Cancelled'` |
+| `status` | personal_training_status | `'Scheduled'`, `'Completed'`, `'Cancelled'` |
 
 ---
 

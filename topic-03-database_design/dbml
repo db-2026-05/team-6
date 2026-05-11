@@ -38,6 +38,87 @@
 // Вставте ваш DBML-код нижче 👇
 
 // ═══════════════════════════════════════════
+// ENUMS
+// Database-level type safety for columns that
+// accept a fixed set of values.
+// ═══════════════════════════════════════════
+
+enum recurrence_frequency {
+  daily
+  weekly
+  monthly
+}
+
+enum day_of_week {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+}
+
+enum work_day_of_week {
+  Monday
+  Tuesday
+  Wednesday
+  Thursday
+  Friday
+  Saturday
+  Sunday
+}
+
+enum class_schedule_status {
+  Scheduled
+  Cancelled
+  Completed
+}
+
+enum attendance_status {
+  Booked
+  Attended
+  "No-show"
+  Cancelled
+}
+
+enum membership_type {
+  monthly
+  yearly
+  premium
+}
+
+enum leave_type {
+  Sick
+  Vacation
+  Personal
+}
+
+enum leave_status {
+  Pending
+  Approved
+  Rejected
+}
+
+enum equipment_status {
+  Available
+  "Under Repair"
+  Broken
+}
+
+enum goal_status {
+  "In Progress"
+  Completed
+  Abandoned
+}
+
+enum personal_training_status {
+  Scheduled
+  Completed
+  Cancelled
+}
+
+// ═══════════════════════════════════════════
 // CORE: PERSONAL DATA & ROLES
 // Stores the base identity of every person in
 // the system. Members and Trainers extend this
@@ -80,7 +161,7 @@ Table memberships {
   // A versioned membership product. When price changes, insert a new row.
   // valid_to null means currently active.
   membership_id integer [primary key]
-  type varchar [not null]
+  type membership_type [not null]
   price decimal [not null]
   currency varchar [not null]
   valid_from date [not null]
@@ -126,7 +207,7 @@ Table class_recurrence_rules {
   class_id integer [ref: > class_templates.class_id]
   trainer_id integer [ref: > trainers.trainer_id]
   room_id integer [ref: > rooms.room_id]
-  frequency varchar [not null]
+  frequency recurrence_frequency [not null]
   start_time time
   start_date date
   end_date date
@@ -136,7 +217,7 @@ Table rule_week_days {
   // Days of the week for weekly recurrence rules.
   // One row per day per rule. Only populated when frequency = 'weekly'.
   rule_id integer [not null, ref: > class_recurrence_rules.rule_id]
-  day_of_week varchar [not null]
+  day_of_week day_of_week [not null]
   indexes {
     (rule_id, day_of_week) [pk]
   }
@@ -162,7 +243,7 @@ Table class_schedule {
   room_id integer [ref: > rooms.room_id]
   start_datetime timestamp
   end_datetime timestamp
-  status varchar
+  status class_schedule_status
 }
 
 Table attendance {
@@ -171,7 +252,7 @@ Table attendance {
   member_id integer [ref: > members.member_id]
   class_schedule_id integer [ref: > class_schedule.class_schedule_id]
   check_in_time timestamp
-  status varchar
+  status attendance_status
 }
 
 
@@ -193,7 +274,7 @@ Table equipment {
   // Equipment items in fitmess center
   equipment_id integer [primary key]
   name varchar [not null]
-  status varchar
+  status equipment_status
   last_maintenance date
 }
 
@@ -223,7 +304,7 @@ Table trainer_work_schedule {
   // Regular weekly working hours for a trainer
   work_schedule_id integer [primary key]
   trainer_id integer [ref: > trainers.trainer_id]
-  day_of_week varchar
+  day_of_week work_day_of_week
   start_time time
   end_time time
   is_active boolean [default: true]
@@ -234,10 +315,10 @@ Table trainer_leaves {
   // Used to flag trainer unavailability for scheduling checks.
   leave_id integer [primary key]
   trainer_id integer [ref: > trainers.trainer_id]
-  leave_type varchar
+  leave_type leave_type
   start_date date
   end_date date
-  status varchar
+  status leave_status
   notes text
 }
 
@@ -255,7 +336,7 @@ Table goals {
   goal_description varchar
   target_value varchar
   deadline date
-  status varchar
+  status goal_status
   created_at timestamp [default: `now()`]
 }
 
@@ -281,5 +362,5 @@ Table personal_training {
   member_id integer [ref: > members.member_id]
   trainer_id integer [ref: > trainers.trainer_id]
   training_date timestamp
-  status varchar
+  status personal_training_status
 }
