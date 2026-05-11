@@ -155,8 +155,6 @@ Table rule_month_days {
 Table class_schedule {
   // Individual materialized class sessions on the calendar.
   // Generated from recurrence rules by a background job.
-  // is_override flags sessions that deviate from their rule
-  // (e.g. substitute trainer, room change).
   class_schedule_id integer [primary key]
   rule_id integer [ref: > class_recurrence_rules.rule_id]
   class_id integer [ref: > class_templates.class_id]
@@ -165,8 +163,6 @@ Table class_schedule {
   start_datetime timestamp
   end_datetime timestamp
   status varchar
-  is_override boolean
-  override_reason varchar
 }
 
 Table attendance {
@@ -260,7 +256,7 @@ Table goals {
   target_value varchar
   deadline date
   status varchar
-  created_at date [default: `now()`]
+  created_at timestamp [default: `now()`]
 }
 
 Table progress {
@@ -269,7 +265,7 @@ Table progress {
   goal_id integer [ref: > goals.goal_id]
   current_state varchar
   notes text
-  check_date date [default: `now()`]
+  check_date timestamp [default: `now()`]
 }
 
 

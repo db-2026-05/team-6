@@ -14,7 +14,7 @@ A relational database for managing a fitness center — memberships, classes, tr
 ---
 ## ER Diagram
 ### [dbdiagram](https://dbdiagram.io/d/Fitness-Center-69fdce9f54a51d93d3cef0a1)
-
+###[diagram with mvp/final version tables color separation](docs/ER_Diagram.png)
 
 ---
 ## Overview
@@ -190,10 +190,8 @@ Materialized individual calendar sessions generated from recurrence rules by a b
 | `start_datetime`    | timestamp |                                                                      |
 | `end_datetime`      | timestamp |                                                                      |
 | `status`            | varchar   | `'Scheduled'`, `'Cancelled'`, `'Completed'`                          |
-| `is_override`       | boolean   | `true` when this session intentionally differs from its rule         |
-| `override_reason`   | varchar   | Human-readable explanation of the override                           |
 
-**Design note:** `class_id`, `trainer_id`, and `room_id` are duplicated from the rule intentionally. When `is_override = false` they should match the rule exactly. When `is_override = true` they represent the actual values for that session (e.g. substitute trainer).
+**Design note:** `class_id`, `trainer_id`, and `room_id` are duplicated from the rule intentionally. They normally match the rule, but can differ when a session is modified (e.g. substitute trainer, room change).
 
 ### `attendance`
 Records each member's booking or presence at a specific session.
@@ -290,7 +288,7 @@ A fitness goal set by a member. Goals are deliberately flexible — `target_valu
 | `target_value` | varchar | The target to reach |
 | `deadline` | date | Optional target date |
 | `status` | varchar | e.g. `'In Progress'`, `'Completed'`, `'Abandoned'` |
-| `created_at` | date | Defaults to `now()` |
+| `created_at` | timestamp | Defaults to `now()` |
 
 ### `progress`
 A timestamped check-in entry against a goal. Multiple entries per goal build a progress timeline.
@@ -301,7 +299,7 @@ A timestamped check-in entry against a goal. Multiple entries per goal build a p
 | `goal_id` | integer | FK → `goals` |
 | `current_state` | varchar | Current value or qualitative state |
 | `notes` | text | Optional context |
-| `check_date` | date | Defaults to `now()` |
+| `check_date` | timestamp | Defaults to `now()` |
 
 ---
 
@@ -340,9 +338,6 @@ This separation means a single class type can have multiple recurring assignment
 ### Recurrence days — two dedicated tables
 Weekly and monthly day details live in separate tables rather than on the rule itself. `rule_week_days` holds day-of-week values (`'MON'`, `'WED'`) for weekly rules; `rule_month_days` holds day-of-month values (`'1'`, `'15'`) for monthly rules. Daily rules need neither. Keeping them separate prevents invalid combinations, makes each table self-documenting, and allows multiple days per rule in both cases without any schema change.
 
-### Override tracking on sessions
-When a `class_schedule` session deviates from its rule (substitute trainer, room change), `is_override = true` and `override_reason` is populated. The denormalized `trainer_id` and `room_id` columns on `class_schedule` then represent the *actual* values for that session, making reporting accurate without requiring rule joins.
-
 ---
 
 ## Known Constraints & Limitations
@@ -357,3 +352,8 @@ A progress check-in cannot exist without a parent `goals` row. Goalless measurem
 
 **Leave approval has no approver**
 `trainer_leaves` tracks a `status` but not who approved it.
+
+**`class_recurrence_rules` frequency consistency
+- `frequency = 'daily'` ⟹ no rows in `rule_week_days` or `rule_month_days` for this `rule_id`
+- `frequency = 'weekly'` ⟹ at least one row in `rule_week_days`; no rows in `rule_month_days`
+- `frequency = 'monthly'` ⟹ at least one row in `rule_month_days`; no rows in `rule_week_days`
