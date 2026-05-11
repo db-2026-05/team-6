@@ -36,3 +36,254 @@
 
 
 // Вставте ваш DBML-код нижче 👇
+
+// ═══════════════════════════════════════════
+// CORE: PERSONAL DATA & ROLES
+// Stores the base identity of every person in
+// the system. Members and Trainers extend this
+// via a 1-to-1 relationship.
+// ═══════════════════════════════════════════
+
+Table persons {
+  // Base identity record for any person in the system
+  person_id integer [primary key]
+  first_name varchar [not null]
+  last_name varchar [not null]
+  email varchar [unique, not null]
+  phone varchar
+  birth_date date
+}
+
+Table members {
+  // A person who holds or has held a gym membership
+  member_id integer [primary key]
+  person_id integer [unique, not null, ref: - persons.person_id]
+}
+
+Table trainers {
+  // A person employed as a trainer
+  trainer_id integer [primary key]
+  person_id integer [unique, not null, ref: - persons.person_id]
+  hire_date date
+}
+
+
+// ═══════════════════════════════════════════
+// MEMBERSHIPS
+// Defines available membership products and
+// tracks which members hold which memberships.
+// New prices are handled by creating new
+// memberships rows, not editing existing ones.
+// ═══════════════════════════════════════════
+
+Table memberships {
+  // A versioned membership product. When price changes, insert a new row.
+  // valid_to null means currently active.
+  membership_id integer [primary key]
+  type varchar [not null]
+  price decimal [not null]
+  currency varchar [not null]
+  valid_from date [not null]
+  valid_to date
+}
+
+Table members_memberships {
+  // Records which membership product a member signed up for and when.
+  // Supports full membership history per member.
+  members_membership_id integer [primary key]
+  membership_id integer [ref: > memberships.membership_id]
+  member_id integer [ref: > members.member_id]
+  start_date date
+  end_date date
+  discount integer
+}
+
+
+// ═══════════════════════════════════════════
+// SCHEDULING & ATTENDANCE
+// Three-layer model:
+//   1. class_templates       — what a class is
+//   2. class_recurrence_rules + rule_days — when it repeats and who runs it
+//   3. class_schedule        — materialized calendar instances
+// Attendance records member presence per session.
+// ═══════════════════════════════════════════
+
+Table class_templates {
+  // Catalogue of class types available at the gym
+  class_id integer [primary key]
+  class_name varchar [not null]
+  description text
+  duration_minutes integer
+  capacity integer
+}
+
+Table class_recurrence_rules {
+  // Defines a repeating assignment: a trainer runs a class
+  // in a room on a recurring pattern.
+  // For weekly rules, days are stored in rule_days.
+  // For monthly rules, day_of_month is used instead.
+  rule_id integer [primary key]
+  class_id integer [ref: > class_templates.class_id]
+  trainer_id integer [ref: > trainers.trainer_id]
+  room_id integer [ref: > rooms.room_id]
+  frequency varchar [not null]
+  start_time time
+  start_date date
+  end_date date
+}
+
+Table rule_week_days {
+  // Days of the week for weekly recurrence rules.
+  // One row per day per rule. Only populated when frequency = 'weekly'.
+  rule_id integer [not null, ref: > class_recurrence_rules.rule_id]
+  day_of_week varchar [not null]
+  indexes {
+    (rule_id, day_of_week) [pk]
+  }
+}
+
+Table rule_month_days {
+  // Days of month for monthly recurrence rules.
+  // One row per day per rule. Only populated when frequency = 'monthly'.
+  rule_id integer [not null, ref: > class_recurrence_rules.rule_id]
+  day_of_month varchar [not null]
+  indexes {
+    (rule_id, day_of_month) [pk]
+  }
+}
+
+Table class_schedule {
+  // Individual materialized class sessions on the calendar.
+  // Generated from recurrence rules by a background job.
+  // is_override flags sessions that deviate from their rule
+  // (e.g. substitute trainer, room change).
+  class_schedule_id integer [primary key]
+  rule_id integer [ref: > class_recurrence_rules.rule_id]
+  class_id integer [ref: > class_templates.class_id]
+  trainer_id integer [ref: > trainers.trainer_id]
+  room_id integer [ref: > rooms.room_id]
+  start_datetime timestamp
+  end_datetime timestamp
+  status varchar
+  is_override boolean
+  override_reason varchar
+}
+
+Table attendance {
+  // Records a member's booking or presence at a specific session
+  attendance_id integer [primary key]
+  member_id integer [ref: > members.member_id]
+  class_schedule_id integer [ref: > class_schedule.class_schedule_id]
+  check_in_time timestamp
+  status varchar
+}
+
+
+// ═══════════════════════════════════════════
+// ROOMS & EQUIPMENT
+// Rooms are shared across scheduling and
+// equipment assignment. Equipment is anchored
+// to a room.
+// ═══════════════════════════════════════════
+
+Table rooms {
+  // Physical spaces where classes and personal training take place
+  room_id integer [primary key]
+  name varchar [not null]
+  capacity integer
+}
+
+Table equipment {
+  // Equipment items in fitmess center
+  equipment_id integer [primary key]
+  name varchar [not null]
+  status varchar
+  last_maintenance date
+}
+
+
+// ═══════════════════════════════════════════
+// TRAINER MANAGEMENT
+// Covers specializations, regular working hours,
+// and leave requests.
+// ═══════════════════════════════════════════
+
+Table specializations {
+  // Catalogue of trainer specialization types
+  specialization_id integer [primary key]
+  specialization_name varchar [not null]
+}
+
+Table trainer_specializations {
+  // Many-to-many: which specializations a trainer holds
+  trainer_id integer [not null, ref: > trainers.trainer_id]
+  specialization_id integer [not null, ref: > specializations.specialization_id]
+  indexes {
+    (trainer_id, specialization_id) [pk]
+  }
+}
+
+Table trainer_work_schedule {
+  // Regular weekly working hours for a trainer
+  work_schedule_id integer [primary key]
+  trainer_id integer [ref: > trainers.trainer_id]
+  day_of_week varchar
+  start_time time
+  end_time time
+  is_active boolean [default: true]
+}
+
+Table trainer_leaves {
+  // Leave requests (sick days, vacation, personal).
+  // Used to flag trainer unavailability for scheduling checks.
+  leave_id integer [primary key]
+  trainer_id integer [ref: > trainers.trainer_id]
+  leave_type varchar
+  start_date date
+  end_date date
+  status varchar
+  notes text
+}
+
+
+// ═══════════════════════════════════════════
+// GOALS & PROGRESS
+// Members can set fitness goals and log
+// progress entries against them over time.
+// ═══════════════════════════════════════════
+
+Table goals {
+  // A fitness goal set by a member
+  goal_id integer [primary key]
+  member_id integer [ref: > members.member_id]
+  goal_description varchar
+  target_value varchar
+  deadline date
+  status varchar
+  created_at date [default: `now()`]
+}
+
+Table progress {
+  // A progress check-in logged against a goal
+  progress_id integer [primary key]
+  goal_id integer [ref: > goals.goal_id]
+  current_state varchar
+  notes text
+  check_date date [default: `now()`]
+}
+
+
+// ═══════════════════════════════════════════
+// PERSONAL TRAINING
+// One-on-one sessions booked between a member
+// and a trainer, outside the group class schedule.
+// ═══════════════════════════════════════════
+
+Table personal_training {
+  // A one-on-one training session between a member and trainer
+  session_id integer [primary key]
+  member_id integer [ref: > members.member_id]
+  trainer_id integer [ref: > trainers.trainer_id]
+  training_date timestamp
+  status varchar
+}
