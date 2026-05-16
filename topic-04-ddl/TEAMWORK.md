@@ -8,7 +8,7 @@
 | Учасник | Роль у команді | Що зроблено | Артефакти / файли |
 |---|---|---|---|
 | Oleksandr Chura | учасник | Відповідав за таблиці та constraints повʼязані з CLASS AND SCHEDULING MANAGEMENT | [video](https://drive.google.com/file/d/1Cu9SCccP8MFf59W7MHuqO9FSjXdEDPG-/view?usp=sharing) |
-| ... | ... | ... | ... |
+| Dmytro Tokariev | учасник | Відповідав за таблиці та constraints повʼязані з Equipment and Goal Tracking | [video] (https://drive.google.com/file/d/1ZblTMb1xZBnJSzaSkcflFdnzDG3SY9n_/view?usp=drive_link) |
 | ... | ... | ... | ... |
 
 ## Контекст теми
@@ -20,7 +20,7 @@
 | Bohdan Bohelskyi | Person & Trainer Specializations |
 | Oleksandr Chura | Class & Scheduling Management |
 | Oleh Svyrydenko | Membership Management збір та перевірка виконання скрипта в Supabase |
-| Dmytro Tokariyev | Equipment & Goal Tracking |
+| Dmytro Tokariev | Equipment & Goal Tracking |
 | Andrew Chernuha | Personal Training Management |
 
 
