@@ -9,6 +9,7 @@
 |---|---|---|---|
 | Oleksandr Chura | учасник | Відповідав за таблиці та constraints повʼязані з CLASS AND SCHEDULING MANAGEMENT | [video](https://drive.google.com/file/d/1Cu9SCccP8MFf59W7MHuqO9FSjXdEDPG-/view?usp=sharing) |
 | Dmytro Tokariev | учасник | Відповідав за таблиці та constraints повʼязані з Equipment and Goal Tracking | [video] (https://drive.google.com/file/d/1ZblTMb1xZBnJSzaSkcflFdnzDG3SY9n_/view?usp=drive_link) |
+| Oleh Svyrydenko | учасник | Membership & Attendance Management, indexes, збір та перевірка виконання скрипта в Supabase | https://drive.google.com/file/d/1xcupu_HY2dUtTShjCL4371flYZO1yHqm/view?usp=sharing |
 | ... | ... | ... | ... |
 
 ## Контекст теми
