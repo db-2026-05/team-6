@@ -10,7 +10,7 @@
 | Oleksandr Chura | учасник | Відповідав за таблиці та constraints повʼязані з CLASS AND SCHEDULING MANAGEMENT | [video](https://drive.google.com/file/d/1Cu9SCccP8MFf59W7MHuqO9FSjXdEDPG-/view?usp=sharing) |
 | Dmytro Tokariev | учасник | Відповідав за таблиці та constraints повʼязані з Equipment and Goal Tracking | [video] (https://drive.google.com/file/d/1ZblTMb1xZBnJSzaSkcflFdnzDG3SY9n_/view?usp=drive_link) |
 | Oleh Svyrydenko | учасник | Membership & Attendance Management, indexes, збір та перевірка виконання скрипта в Supabase | https://drive.google.com/file/d/1xcupu_HY2dUtTShjCL4371flYZO1yHqm/view?usp=sharing |
-| ... | ... | ... | ... |
+| Andrew Chernuha | Developer | Працював над наступними таблицями: personal_training, trainer_work_schedule, trainer_leaves | [video](https://www.loom.com/share/fa7b35591d664feca1552adc660401d0) |
 
 ## Контекст теми
 Опишіть, хто відповідав за: створення таблиць, PK/FK, constraints, indexes, порядок секцій у `ddl.sql` та перевірку виконання скрипта у PostgreSQL.
