@@ -693,6 +693,11 @@ CREATE INDEX idx_members_memberships_membership_id
 CREATE INDEX idx_attendance_member_id
     ON gym.attendance(member_id);
 
+-- Ensures only one active membership per member.
+CREATE UNIQUE INDEX uq_members_active_membership
+    ON gym.members_memberships(member_id)
+    WHERE end_date IS NULL;
+
 CREATE INDEX idx_attendance_class_schedule_id
     ON gym.attendance(class_schedule_id);
 
