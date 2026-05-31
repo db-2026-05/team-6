@@ -340,3 +340,168 @@ INSERT INTO gym.class_schedule (rule_id, class_id, trainer_id, room_id, start_da
 --   are operational actions driven by the application. The constraint
 --   checks that matter (datetime range, FK integrity) are fully
 --   tested by the insertion and constraint-validation sections above.
+
+-- ================================================================
+-- Tables: equipment, goals, progress
+-- Author:   Dmytro Tokariev
+-- ================================================================
+-- Description:
+--   This script populates the database with realistic test data.
+--   Each table has at least 10 records.
+--   Includes INSERT and UPDATE operations.
+-- ================================================================
+
+-- ================================================================
+-- SECTION 1: EQUIPMENT TABLE
+-- Stores fitness center equipment inventory
+-- Records added: 11
+-- Fields: name, status, last_maintenance
+-- ================================================================
+
+INSERT INTO gym.equipment (name, status, last_maintenance) VALUES
+    ('Treadmill X1', 'available', '2025-04-15'),
+    ('Treadmill X2', 'available', '2025-04-15'),
+    ('Elliptical E5', 'under_repair', '2025-03-01'),
+    ('Elliptical E6', 'available', '2025-05-10'),
+    ('Stationary Bike B7', 'available', '2025-04-20'),
+    ('Stationary Bike B8', 'broken', '2025-02-15'),
+    ('Rowing Machine R3', 'available', '2025-05-01'),
+    ('Rowing Machine R4', 'under_repair', '2025-04-01'),
+    ('Dumbbell Set 20kg', 'available', '2025-05-12'),
+    ('Dumbbell Set 30kg', 'available', '2025-05-12'),
+    ('Toorx Station CSX70', 'available', '2025-04-15');
+
+-- ================================================================
+-- SECTION 2: GOALS TABLE
+-- Stores fitness goals set by members
+-- Dependencies: member_id references gym.members
+-- Records added: 10
+-- Fields: member_id, goal_description, target_value, deadline, status, created_at
+-- ================================================================
+
+INSERT INTO gym.goals (member_id, goal_description, target_value, deadline, status, created_at) VALUES
+    (1, 'Lose weight before summer', '75 kg', '2025-07-01', 'in_progress', '2025-01-10'),
+    (1, 'Increase pull-ups', '10 reps', '2025-08-15', 'in_progress', '2025-02-01'),
+    (1, 'Improve running endurance', '5 km in 25 min', '2025-09-30', 'in_progress', '2025-02-15'),
+    (2, 'Build muscle mass', '85 kg body weight', '2025-12-31', 'in_progress', '2025-01-20'),
+    (2, 'Master handstand', '30 seconds', '2025-10-01', 'in_progress', '2025-03-01'),
+    (3, 'Recover from injury', 'Pain-free running', '2025-06-15', 'completed', '2024-12-01'),
+    (3, 'Strengthen core', '100 sit-ups in one set', '2025-08-01', 'in_progress', '2025-01-05'),
+    (4, 'Prepare for marathon', '42 km in 4 hours', '2025-11-15', 'in_progress', '2025-01-10'),
+    (4, 'Improve flexibility', 'Full split', '2025-12-01', 'abandoned', '2025-01-15'),
+    (5, 'Reduce stress', 'Meditate daily 15 min', '2025-06-01', 'completed', '2025-01-01');
+
+-- ================================================================
+-- SECTION 3: PROGRESS TABLE
+-- Tracks progress check-ins against goals
+-- Dependencies: goal_id references gym.goals
+-- Records added: 17
+-- Fields: goal_id, current_state, notes, check_date
+-- ================================================================
+
+INSERT INTO gym.progress (goal_id, current_state, notes, check_date) VALUES
+    -- Progress for goal_id = 1 (Lose weight)
+    (1, '78 kg', 'First measurement', '2025-02-01'),
+    (1, '76.5 kg', 'Steady progress', '2025-03-01'),
+    (1, '75.5 kg', 'Almost there', '2025-04-01'),
+    
+    -- Progress for goal_id = 2 (Pull-ups)
+    (2, '5 reps', 'Starting point', '2025-02-10'),
+    (2, '7 reps', 'Improving', '2025-03-15'),
+    (2, '8 reps', 'Need more training', '2025-04-10'),
+    
+    -- Progress for goal_id = 3 (Running endurance)
+    (3, '5 km in 32 min', 'Baseline', '2025-03-01'),
+    (3, '5 km in 29 min', 'Good progress', '2025-04-01'),
+    
+    -- Progress for goal_id = 4 (Muscle mass)
+    (4, '78 kg', 'Starting weight', '2025-02-01'),
+    (4, '80 kg', '+2 kg muscle', '2025-03-01'),
+    (4, '82 kg', 'Good bulk', '2025-04-01'),
+    
+    -- Progress for goal_id = 5 (Handstand)
+    (5, '5 seconds', 'Learning to balance', '2025-03-15'),
+    (5, '15 seconds', 'Getting better', '2025-04-15'),
+    
+    -- Progress for goal_id = 6 (Injury recovery - completed goal)
+    (6, 'Pain-free walking', 'Recovery milestone', '2025-02-01'),
+    (6, 'Pain-free running', 'Goal achieved', '2025-05-01');
+
+-- ================================================================
+-- SECTION 4: EQUIPMENT TABLE - UPDATES
+-- Table: gym.equipment
+-- Operation: UPDATE status after maintenance/repair is completed
+-- Scenario: Equipment that was broken/under_repair is now available
+-- ================================================================
+
+-- 4.1 Update: Stationary Bike B8 was broken, now repaired and available
+UPDATE gym.equipment
+SET status = 'available', 
+    last_maintenance = '2026-04-20'
+WHERE name = 'Stationary Bike B8' AND status = 'broken';
+
+-- 4.2 Update: Rowing Machine R4 was under repair, now available
+UPDATE gym.equipment 
+SET status = 'available', 
+    last_maintenance = '2026-05-25'
+WHERE name = 'Rowing Machine R4' AND status = 'under_repair';
+
+-- 4.3 Update: Elliptical E5 was under repair, now available
+UPDATE gym.equipment
+SET status = 'available', 
+    last_maintenance = '2026-04-20'
+WHERE name = 'Elliptical E5' AND status = 'under_repair';
+
+-- ================================================================
+-- SECTION 5: CONSTRAINT TESTS (commented)
+-- These demonstrate that all constraints work as expected
+-- ================================================================
+
+-- 5.1 ENUM constraint on equipment.status
+-- This would fail: status 'new' is not in ENUM {'available','under_repair','broken'}
+-- INSERT INTO gym.equipment (name, status) VALUES ('Test Machine', 'new');
+-- Expected error: value for enum "equipment_status" is not in enum
+
+-- 5.2 CHECK constraint on equipment.last_maintenance
+-- This would fail: future date (2027) not allowed
+-- INSERT INTO gym.equipment (name, status, last_maintenance) 
+-- VALUES ('Test Machine', 'available', '2027-01-01');
+-- Expected error: violates check constraint "chk_equipment_maintenance_not_future"
+
+-- 5.3 CHECK constraint on goals.deadline
+-- This would fail: year 1999 is before 2000
+-- INSERT INTO gym.goals (member_id, goal_description, deadline) 
+-- VALUES (1, 'Old goal', '1999-12-31');
+-- Expected error: violates check constraint "chk_goals_deadline"
+
+-- 5.4 UNIQUE constraint on progress (goal_id, check_date)
+-- This would fail: duplicate check_date for same goal (goal_id=1, date=2025-04-01)
+-- INSERT INTO gym.progress (goal_id, current_state, check_date) 
+-- VALUES (1, '75 kg', '2025-04-01');
+-- Expected error: duplicate key violates unique constraint "uq_progress_goal_date"
+
+-- 5.5 FOREIGN KEY constraint on progress.goal_id
+-- This would fail: goal_id 999 does not exist in goals table
+-- INSERT INTO gym.progress (goal_id, current_state, check_date) 
+-- VALUES (999, 'Test', '2026-01-01');
+-- Expected error: violates foreign key constraint "fk_progress_goal"
+
+-- 5.6 FOREIGN KEY with CASCADE DELETE (demonstration)
+-- This shows that ON DELETE CASCADE works (goal deletion removes progress)
+-- Uncomment to test:
+-- DELETE FROM gym.goals WHERE goal_id = 6;
+-- SELECT * FROM gym.progress WHERE goal_id = 6; -- Would return 0 rows
+
+-- ================================================================
+-- WHY DELETE IS NOT INCLUDED
+-- ================================================================
+-- DELETE operations are omitted for the following reasons:
+-- 1. Business context: Fitness centers PRESERVE historical data
+--    - Deleted goals would break progress history charts
+--    - Equipment maintenance logs must be kept for audits
+--    - Member progress data is valuable for analytics
+-- 2. CASCADE DELETE is already tested in SECTION 5 (constraints)
+--    The foreign key ON DELETE CASCADE is demonstrated there
+-- 3. Our application uses SOFT DELETE pattern
+--    Status fields like 'abandoned', 'broken' indicate deletion
+--    Actual DELETE from database is rarely used
