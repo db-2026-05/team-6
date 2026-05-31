@@ -25,16 +25,16 @@ The database uses `ENUM` types instead of plain `VARCHAR` for columns with a fix
 | Enum | Values | Used by |
 |---|---|---|
 | `recurrence_frequency` | `daily`, `weekly`, `monthly` | `class_recurrence_rules.frequency` |
-| `day_of_week` | `MON`, `TUE`, `WED`, `THU`, `FRI`, `SAT`, `SUN` | `rule_week_days.day_of_week` |
-| `work_day_of_week` | `Monday` .. `Sunday` | `trainer_work_schedule.day_of_week` |
-| `class_schedule_status` | `Scheduled`, `Cancelled`, `Completed` | `class_schedule.status` |
-| `attendance_status` | `Booked`, `Attended`, `No-show`, `Cancelled` | `attendance.status` |
+| `day_of_week` | `mon`, `tue`, `wed`, `thu`, `fri`, `sat`, `sun` | `rule_week_days.day_of_week` |
+| `work_day_of_week` | `monday` .. `sunday` | `trainer_work_schedule.day_of_week` |
+| `class_schedule_status` | `scheduled`, `cancelled`, `completed` | `class_schedule.status` |
+| `attendance_status` | `booked`, `attended`, `no-show`, `cancelled` | `attendance.status` |
 | `membership_type` | `monthly`, `yearly`, `premium` | `memberships.type` |
-| `leave_type` | `Sick`, `Vacation`, `Personal` | `trainer_leaves.leave_type` |
-| `leave_status` | `Pending`, `Approved`, `Rejected` | `trainer_leaves.status` |
-| `equipment_status` | `Available`, `Under Repair`, `Broken` | `equipment.status` |
-| `goal_status` | `In Progress`, `Completed`, `Abandoned` | `goals.status` |
-| `personal_training_status` | `Scheduled`, `Completed`, `Cancelled` | `personal_training.status` |
+| `leave_type` | `sick`, `vacation`, `personal` | `trainer_leaves.leave_type` |
+| `leave_status` | `pending`, `approved`, `rejected` | `trainer_leaves.status` |
+| `equipment_status` | `available`, `under_repair`, `broken` | `equipment.status` |
+| `goal_status` | `in_progress`, `completed`, `abandoned` | `goals.status` |
+| `personal_training_status` | `scheduled`, `completed`, `cancelled` | `personal_training.status` |
 
 ---
 ## Overview
