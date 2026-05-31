@@ -8,7 +8,7 @@
 | Учасник | Роль у команді | Що зроблено | Артефакти / файли |
 |---|---|---|---|
 | Andrew Chernuha | Developer | Added dml request to fill in propper tables | [dml](./dml.sql) |
-| Oleksandr Chura | учасник | INSERT-скрипти для таблиць CLASS AND SCHEDULING MANAGEMENT (rooms, class_templates, class_recurrence_rules, rule_week_days, rule_month_days, class_schedule), валідація constraints (CHECK, UNIQUE, FK, PK) | dml.sql |
+| Oleksandr Chura | учасник | INSERT-скрипти для таблиць CLASS AND SCHEDULING MANAGEMENT (rooms, class_templates, class_recurrence_rules, rule_week_days, rule_month_days, class_schedule), валідація constraints (CHECK, UNIQUE, FK, PK) | dml.sql [video](https://drive.google.com/file/d/1-SZiYYvzmxT1N8L9qi7x1BMOlkm4TEdc/view?usp=sharing) |
 | ... | ... | ... | ... |
 
 ## Контекст теми
