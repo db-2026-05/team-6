@@ -41,80 +41,35 @@ INSERT INTO gym.persons (first_name, last_name, email, phone, birth_date) VALUES
     ('Maryna',   'Shevchenko', 'maryna.shevchenko@example.com', '+380672223344', '1990-07-22'),
     ('Dmytro',   'Bondarenko', 'dmytro.bondarenko@example.com', '+380933334455', '1988-11-04'),
     ('Olena',    'Tkachenko',  'olena.tkachenko@example.com',   '+380504445566', '1992-01-30'),
-    ('Pavlo',    'Melnyk',     'pavlo.melnyk@example.com',      '+380675556677', '1987-06-18');
+    ('Pavlo',    'Melnyk',     'pavlo.melnyk@example.com',      '+380675556677', '1987-06-18'),
+    ('Ihor',     'Petrenko',   'ihor.petrenko@example.com',     '+380501234561', '1991-05-12'),
+    ('Kateryna', 'Ivanenko',   'kateryna.ivanenko@example.com', '+380501234562', '1993-07-18'),
+    ('Roman',    'Kravchenko', 'roman.kravchenko@example.com',  '+380501234563', '1989-09-21'),
+    ('Svitlana', 'Bondar',     'svitlana.bondar@example.com',   '+380501234564', '1994-02-11'),
+    ('Oleksii',  'Marchenko',  'oleksii.marchenko@example.com', '+380501234565', '1990-11-03'),
+    ('Taras',    'Hrytsenko',  'taras.hrytsenko@example.com',   '+380501234566', '1985-01-10'),
+    ('Natalia',  'Koval',      'natalia.koval@example.com',     '+380501234567', '1986-03-22'),
+    ('Yurii',    'Savchenko',  'yurii.savchenko@example.com',   '+380501234568', '1982-08-15'),
+    ('Oksana',   'Lysenko',    'oksana.lysenko@example.com',    '+380501234569', '1988-06-09'),
+    ('Viktor',   'Tkachenko',  'viktor.tkachenko@example.com',  '+380501234570', '1984-04-27'),
+    ('Anna',     'Moroz',      'anna.moroz@example.com',        '+380501234571', '1990-10-05'),
+    ('Serhii',   'Polishchuk', 'serhii.polishchuk@example.com', '+380501234572', '1983-12-14'),
+    ('Iryna',    'Melnyk',     'iryna.melnyk@example.com',      '+380501234573', '1987-05-30'),
+    ('Denys',    'Shevchuk',   'denys.shevchuk@example.com',    '+380501234574', '1981-09-17'),
+    ('Alina',    'Dovzhenko',  'alina.dovzhenko@example.com',   '+380501234575', '1992-07-25');
+
 
 INSERT INTO gym.trainers (person_id, hire_date) VALUES
-    (1, '2020-01-15'),
-    (2, '2019-06-01'),
-    (3, '2021-03-10'),
-    (4, '2022-08-20'),
-    (5, '2023-02-01');
-
-
--- personal_training
-
--- Author - Andrew Chernuha
--- =========================================================
--- SEED DATA — PERSONAL TRAINING, WORK SCHEDULE, LEAVES
--- Generates realistic test data for trainer-related tables.
--- All values reference trainer_id 1–10 and member_id 1–10,
--- which must exist in gym.trainers and gym.members before running.
--- =========================================================
-
--- ---------------------------------------------------------
--- personal_training
--- 10 sessions, one per day starting from now.
--- member_id cycles 1–10, trainer_id rotates across 1–3
--- to avoid uq_trainer_time unique constraint conflicts.
--- Status is assigned randomly from all three lifecycle values.
--- ---------------------------------------------------------
-INSERT INTO gym.personal_training (member_id, trainer_id, training_date, status)
-SELECT
-    i                                                                         AS member_id,
-    i                                                                         AS trainer_id,
-    NOW() + (i * INTERVAL '1 day')                                            AS training_date,
-    (ARRAY['scheduled','completed','cancelled']::gym.personal_training_status[])[floor(random() * 3 + 1)::int] AS status
-FROM generate_series(1, 10) AS i; 
-
--- Author - Andrew Chernuha
--- ---------------------------------------------------------
--- trainer_work_schedule
--- Generates 5 weekday rows (mon–fri) for each of the 10 trainers.
--- All trainers share the same shift: 09:00–18:00.
--- uq_trainer_day prevents duplicate days per trainer,
--- so this insert is safe to run only once.
--- ---------------------------------------------------------
-INSERT INTO gym.trainer_work_schedule (trainer_id, day_of_week, start_time, end_time, is_active)
-SELECT
-    trainer_id,
-    day_of_week,
-    '09:00'::TIME,
-    '18:00'::TIME,
-    TRUE
-FROM
-    generate_series(1, 10) AS trainer_id,
-    UNNEST(ARRAY['mon','tue','wed','thu','fri']::gym.day_of_week[]) AS day_of_week;
-
--- Author - Andrew Chernuha
--- ---------------------------------------------------------
--- trainer_leaves
--- 2 leave requests per trainer = 20 rows total.
--- start_date is random within 2024.
--- end_date is always start_date + 7 days.
--- Note: random() is evaluated per row, so start_date and end_date
--- are independent — chk_leaves_date_range guarantees end >= start.
--- leave_type and status are assigned randomly.
--- ---------------------------------------------------------
-INSERT INTO gym.trainer_leaves (trainer_id, leave_type, start_date, end_date, status, notes)
-SELECT
-    trainer_id,
-    (ARRAY['sick','vacation','personal']::gym.leave_type[])[floor(random() * 3 + 1)::int],
-    (DATE '2024-01-01' + (random() * 300)::int * INTERVAL '1 day')::date,
-    (DATE '2024-01-01' + (random() * 300)::int * INTERVAL '1 day' + INTERVAL '7 days')::date,
-    (ARRAY['pending','approved','rejected']::gym.leave_status[])[floor(random() * 3 + 1)::int],
-    'Auto-generated leave'
-FROM generate_series(1, 10) AS trainer_id,
-     generate_series(1, 2);
+   (1, '2020-01-15'),
+   (2, '2019-06-01'),
+   (3, '2021-03-10'),
+   (4, '2022-08-20'),
+   (5, '2023-02-01'), 
+   (6, '2020-04-11'),
+   (7, '2021-07-01'),
+   (8, '2018-11-20'),
+   (9, '2022-03-15'),
+   (10, '2019-09-01');
 
 
 -- =========================================================
@@ -181,7 +136,7 @@ INSERT INTO gym.class_recurrence_rules (class_id, trainer_id, room_id, frequency
     -- Weekly rules (rule_id 1–5)
     (1, 1, 5, 'weekly',  '08:00', '2025-09-01', '2026-06-30'),  -- Yoga, Mon/Wed/Fri
     (2, 2, 1, 'weekly',  '10:00', '2025-09-01', '2026-06-30'),  -- HIIT, Tue/Thu
-    (3, 3, 4, 'weekly',  ('07:00', '2025-09-01', '2026-06-30'),  -- Spinning, Mon/Wed/Fri
+    (3, 3, 4, 'weekly',  '07:00', '2025-09-01', '2026-06-30'),  -- Spinning, Mon/Wed/Fri
     (4, 4, 2, 'weekly',  '18:00', '2025-09-01', '2026-06-30'),  -- Pilates, Tue/Thu/Sat
     (5, 5, 1, 'weekly',  '19:00', '2025-09-01', '2026-06-30'),  -- Zumba, Wed/Fri
 
@@ -340,6 +295,121 @@ INSERT INTO gym.class_schedule (rule_id, class_id, trainer_id, room_id, start_da
 --   are operational actions driven by the application. The constraint
 --   checks that matter (datetime range, FK integrity) are fully
 --   tested by the insertion and constraint-validation sections above.
+
+-- =========================================================
+-- MEMBERSHIP MANAGEMENT
+-- Responsible: Oleh Svyrydenko
+--
+-- Covers:
+-- - membership products
+-- - member registration
+-- - membership enrollment history
+-- - class attendance tracking
+-- =========================================================
+
+-- =========================================================
+-- MEMBERSHIPS
+-- Versioned membership products.
+-- 10 rows to satisfy assignment requirements.
+-- =========================================================
+
+INSERT INTO gym.memberships
+(type, price, currency, valid_from, valid_to)
+VALUES
+('monthly', 800.00, 'UAH', '2023-01-01', '2023-12-31'),
+('monthly', 1000.00, 'UAH', '2024-01-01', '2024-12-31'),
+('monthly', 1200.00, 'UAH', '2025-01-01', NULL),
+
+('yearly', 8000.00, 'UAH', '2023-01-01', '2023-12-31'),
+('yearly', 9500.00, 'UAH', '2024-01-01', '2024-12-31'),
+('yearly', 12000.00, 'UAH', '2025-01-01', NULL),
+
+('premium', 15000.00, 'UAH', '2023-01-01', '2023-12-31'),
+('premium', 18000.00, 'UAH', '2024-01-01', '2024-12-31'),
+('premium', 22000.00, 'UAH', '2025-01-01', NULL),
+('premium', 25000.00, 'UAH', '2026-01-01', NULL);
+
+-- =========================================================
+-- MEMBERS
+-- Assumes person_id 1-10 are gym members.
+-- =========================================================
+
+INSERT INTO gym.members (person_id)
+VALUES
+(11),
+(12),
+(13),
+(14),
+(15),
+(16),
+(17),
+(18),
+(19),
+(20);
+
+-- =========================================================
+-- MEMBERS_MEMBERSHIPS
+-- Membership enrollment history.
+-- =========================================================
+
+INSERT INTO gym.members_memberships
+(membership_id, member_id, start_date, end_date, discount)
+VALUES
+(3, 1, '2025-01-01', NULL, 0),
+(6, 2, '2025-01-01', NULL, 5),
+(9, 3, '2025-01-01', NULL, 10),
+(3, 4, '2025-02-01', NULL, 0),
+(6, 5, '2025-02-01', NULL, 15),
+(9, 6, '2025-03-01', NULL, 0),
+(3, 7, '2025-03-01', NULL, 20),
+(6, 8, '2025-04-01', NULL, 0),
+(9, 9, '2025-04-01', NULL, 5),
+(3,10, '2025-05-01', NULL, 0);
+
+-- =========================================================
+-- ATTENDANCE
+-- Uses class_schedule_id 1-12 created by Oleksandr.
+-- =========================================================
+
+INSERT INTO gym.attendance
+(member_id, class_schedule_id, check_in_time, status)
+VALUES
+(1, 1, '2026-03-02 08:02:00+00', 'attended'),
+(2, 1, '2026-03-02 08:05:00+00', 'attended'),
+(3, 2, NULL, 'no_show'),
+(4, 2, NULL, 'cancelled'),
+(5, 3, '2026-04-08 10:01:00+00', 'attended'),
+(6, 3, '2026-04-08 10:04:00+00', 'attended'),
+(7, 4, NULL, 'cancelled'),
+(8, 5, '2026-05-05 07:00:30+00', 'attended'),
+(9, 6, NULL, 'booked'),
+(10, 7, '2026-05-01 17:03:00+00', 'attended'),
+(1, 8, NULL, 'booked'),
+(2, 9, NULL, 'cancelled');
+
+-- UPDATE and DELETE statements are provided as examples only.
+-- They are commented out to preserve seed data consistency.
+
+-- =========================================================
+-- UPDATE EXAMPLES
+-- =========================================================
+
+-- UPDATE gym.members_memberships
+--SET discount = 10
+--WHERE member_id = 1;
+
+--UPDATE gym.attendance
+-- SET status = 'attended',
+-- check_in_time = '2026-05-07 07:01:00+00'
+-- WHERE attendance_id = 9;
+
+-- =========================================================
+-- DELETE EXAMPLE
+-- =========================================================
+
+-- DELETE FROM gym.attendance
+-- WHERE attendance_id = 10;
+
 
 -- ================================================================
 -- Tables: equipment, goals, progress
@@ -505,3 +575,74 @@ WHERE name = 'Elliptical E5' AND status = 'under_repair';
 -- 3. Our application uses SOFT DELETE pattern
 --    Status fields like 'abandoned', 'broken' indicate deletion
 --    Actual DELETE from database is rarely used
+
+-- personal_training
+
+-- Author - Andrew Chernuha
+-- =========================================================
+-- SEED DATA — PERSONAL TRAINING, WORK SCHEDULE, LEAVES
+-- Generates realistic test data for trainer-related tables.
+-- All values reference trainer_id 1–10 and member_id 1–10,
+-- which must exist in gym.trainers and gym.members before running.
+-- =========================================================
+
+-- ---------------------------------------------------------
+-- personal_training
+-- 10 sessions, one per day starting from now.
+-- member_id cycles 1–10, trainer_id rotates across 1–3
+-- to avoid uq_trainer_time unique constraint conflicts.
+-- Status is assigned randomly from all three lifecycle values.
+-- ---------------------------------------------------------
+INSERT INTO gym.personal_training (member_id, trainer_id, training_date, status)
+SELECT
+    i                                                                         AS member_id,
+    i                                                                         AS trainer_id,
+    NOW() + (i * INTERVAL '1 day')                                            AS training_date,
+    (ARRAY['scheduled','completed','cancelled']::gym.personal_training_status[])[floor(random() * 3 + 1)::int] AS status
+FROM generate_series(1, 10) AS i; 
+
+-- Author - Andrew Chernuha
+-- ---------------------------------------------------------
+-- trainer_work_schedule
+-- Generates 5 weekday rows (mon–fri) for each of the 10 trainers.
+-- All trainers share the same shift: 09:00–18:00.
+-- uq_trainer_day prevents duplicate days per trainer,
+-- so this insert is safe to run only once.
+-- ---------------------------------------------------------
+INSERT INTO gym.trainer_work_schedule (trainer_id, day_of_week, start_time, end_time, is_active)
+SELECT
+    trainer_id,
+    day_of_week,
+    '09:00'::TIME,
+    '18:00'::TIME,
+    TRUE
+FROM
+    generate_series(1, 10) AS trainer_id,
+    UNNEST(ARRAY['mon','tue','wed','thu','fri']::gym.day_of_week[]) AS day_of_week;
+
+-- Author - Andrew Chernuha
+-- ---------------------------------------------------------
+-- trainer_leaves
+-- 2 leave requests per trainer = 20 rows total.
+-- start_date is random within 2024.
+-- end_date is always start_date + 7 days.
+-- Note: random() is evaluated per row, so start_date and end_date
+-- are independent — chk_leaves_date_range guarantees end >= start.
+-- leave_type and status are assigned randomly.
+-- ---------------------------------------------------------
+
+-- Trainer leave records with valid date ranges.
+
+INSERT INTO gym.trainer_leaves
+(trainer_id, leave_type, start_date, end_date, status, notes)
+VALUES
+(1,  'vacation', '2024-01-15', '2024-01-22', 'approved', 'Winter vacation'),
+(2,  'sick',     '2024-02-10', '2024-02-15', 'approved', 'Flu recovery'),
+(3,  'personal', '2024-03-05', '2024-03-12', 'pending',  'Family matters'),
+(4,  'vacation', '2024-04-10', '2024-04-17', 'approved', 'Spring break'),
+(5,  'sick',     '2024-05-01', '2024-05-05', 'approved', 'Medical leave'),
+(6,  'vacation', '2024-06-15', '2024-06-22', 'pending',  'Summer vacation'),
+(7,  'personal', '2024-07-03', '2024-07-10', 'approved', 'Personal reasons'),
+(8,  'vacation', '2024-08-01', '2024-08-08', 'approved', 'Annual holiday'),
+(9,  'sick',     '2024-09-12', '2024-09-16', 'approved', 'Recovery period'),
+(10, 'vacation', '2024-10-05', '2024-10-12', 'pending',  'Family trip');
