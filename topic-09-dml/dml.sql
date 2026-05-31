@@ -28,12 +28,29 @@
 
 -- Add your DML below this line
 
--- TEMPORARY DATA FOR FK SATISFACTION
 -- =========================================================
--- 1. PREREQUISITE DATA — persons & trainers
--- These tables are owned by another team member (Bohdan Bohelskyi).
--- We insert a minimal set here so that our scheduling tables
--- have valid trainer_id references.
+-- PERSON AND TRAINER MANAGEMENT
+-- Responsible: Bohdan Bohelskyi
+-- =========================================================
+-- This section inserts base identity records, trainers,
+-- trainer specialization catalogue data, and trainer-to-specialization
+-- assignments.
+--
+-- These records are also used as FK prerequisites by other modules:
+-- class scheduling, membership management, and personal training.
+--
+-- Execution order follows FK dependencies:
+--   persons
+--   trainers
+--   specializations
+--   trainer_specializations
+-- =========================================================
+
+-- =========================================================
+-- PERSONS
+-- Base identity records shared by trainers and members.
+-- The first 10 persons are used as trainers.
+-- The remaining persons are available for other modules, such as members.
 -- =========================================================
 
 INSERT INTO gym.persons (first_name, last_name, email, phone, birth_date) VALUES
@@ -58,18 +75,148 @@ INSERT INTO gym.persons (first_name, last_name, email, phone, birth_date) VALUES
     ('Denys',    'Shevchuk',   'denys.shevchuk@example.com',    '+380501234574', '1981-09-17'),
     ('Alina',    'Dovzhenko',  'alina.dovzhenko@example.com',   '+380501234575', '1992-07-25');
 
+-- =========================================================
+-- TRAINERS
+-- Each trainer references one existing person.
+-- person_id values 1–10 refer to the first 10 records inserted above.
+-- =========================================================
 
 INSERT INTO gym.trainers (person_id, hire_date) VALUES
    (1, '2020-01-15'),
    (2, '2019-06-01'),
    (3, '2021-03-10'),
    (4, '2022-08-20'),
-   (5, '2023-02-01'), 
+   (5, '2023-02-01'),
    (6, '2020-04-11'),
    (7, '2021-07-01'),
    (8, '2018-11-20'),
    (9, '2022-03-15'),
    (10, '2019-09-01');
+
+-- =========================================================
+-- SPECIALIZATIONS
+-- Catalogue of trainer qualification types.
+-- 10 distinct specialization names.
+-- =========================================================
+
+INSERT INTO gym.specializations (specialization_name) VALUES
+    ('Yoga'),
+    ('HIIT'),
+    ('Strength Training'),
+    ('Pilates'),
+    ('Spinning'),
+    ('Boxing'),
+    ('CrossFit'),
+    ('Stretching'),
+    ('Functional Training'),
+    ('Rehabilitation Training');
+
+-- =========================================================
+-- TRAINER SPECIALIZATIONS
+-- Many-to-many relationship between trainers and specializations.
+-- Composite primary key prevents duplicate trainer-specialization pairs.
+-- =========================================================
+
+INSERT INTO gym.trainer_specializations (trainer_id, specialization_id) VALUES
+    (1, 1),   -- Andrii Kovalenko: Yoga
+    (1, 8),   -- Andrii Kovalenko: Stretching
+    (2, 2),   -- Maryna Shevchenko: HIIT
+    (2, 7),   -- Maryna Shevchenko: CrossFit
+    (3, 5),   -- Dmytro Bondarenko: Spinning
+    (3, 6),   -- Dmytro Bondarenko: Boxing
+    (4, 4),   -- Olena Tkachenko: Pilates
+    (5, 3),   -- Pavlo Melnyk: Strength Training
+    (6, 9),   -- Ihor Petrenko: Functional Training
+    (7, 10),  -- Kateryna Ivanenko: Rehabilitation Training
+    (8, 1),   -- Roman Kravchenko: Yoga
+    (9, 8),   -- Svitlana Bondar: Stretching
+    (10, 3);  -- Oleksii Marchenko: Strength Training
+
+-- =========================================================
+-- CONSTRAINT VALIDATION FOR PERSON AND TRAINER MANAGEMENT
+-- The statements below are intentionally commented out.
+-- They can be uncommented one at a time to verify constraints.
+-- =========================================================
+
+-- persons.phone must contain only digits with optional leading +
+-- Expected: CHECK constraint violation (ck_person_phone_format)
+-- INSERT INTO gym.persons (first_name, last_name, email, phone, birth_date)
+-- VALUES ('Invalid', 'Phone', 'invalid.phone@example.com', '+380ABC123', '1990-01-01');
+
+-- persons.email must match the required email format
+-- Expected: CHECK constraint violation (ck_person_email_format)
+-- INSERT INTO gym.persons (first_name, last_name, email, phone, birth_date)
+-- VALUES ('Invalid', 'Email', 'wrong-email-format', '+380509999999', '1990-01-01');
+
+-- persons.phone must be unique
+-- Expected: UNIQUE constraint violation on phone
+-- INSERT INTO gym.persons (first_name, last_name, email, phone, birth_date)
+-- VALUES ('Duplicate', 'Phone', 'duplicate.phone@example.com', '+380501112233', '1990-01-01');
+
+-- persons.email must be unique
+-- Expected: UNIQUE constraint violation on email
+-- INSERT INTO gym.persons (first_name, last_name, email, phone, birth_date)
+-- VALUES ('Duplicate', 'Email', 'andrii.kovalenko@example.com', '+380509999997', '1990-01-01');
+
+-- persons.birth_date cannot be in the future
+-- Expected: CHECK constraint violation (ck_person_birth_date)
+-- INSERT INTO gym.persons (first_name, last_name, email, phone, birth_date)
+-- VALUES ('Future', 'Birthdate', 'future.birthdate@example.com', '+380509999998', '2999-01-01');
+
+-- trainers.person_id must reference an existing person
+-- Expected: FOREIGN KEY violation (fk_trainer_person)
+-- INSERT INTO gym.trainers (person_id, hire_date)
+-- VALUES (999, '2024-01-01');
+
+-- trainers.person_id must be unique
+-- Expected: UNIQUE constraint violation on person_id
+-- INSERT INTO gym.trainers (person_id, hire_date)
+-- VALUES (1, '2024-01-01');
+
+-- trainers.hire_date cannot be in the future
+-- Expected: CHECK constraint violation (ck_trainer_hire_date)
+-- INSERT INTO gym.trainers (person_id, hire_date)
+-- VALUES (20, '2999-01-01');
+
+-- specializations.specialization_name must be unique
+-- Expected: UNIQUE constraint violation on specialization_name
+-- INSERT INTO gym.specializations (specialization_name)
+-- VALUES ('Yoga');
+
+-- trainer_specializations composite primary key prevents duplicate pairs
+-- Expected: PRIMARY KEY violation (trainer_id, specialization_id)
+-- INSERT INTO gym.trainer_specializations (trainer_id, specialization_id)
+-- VALUES (1, 1);
+
+-- trainer_specializations.trainer_id must reference an existing trainer
+-- Expected: FOREIGN KEY violation
+-- INSERT INTO gym.trainer_specializations (trainer_id, specialization_id)
+-- VALUES (999, 1);
+
+-- trainer_specializations.specialization_id must reference an existing specialization
+-- Expected: FOREIGN KEY violation
+-- INSERT INTO gym.trainer_specializations (trainer_id, specialization_id)
+-- VALUES (1, 999);
+
+-- =========================================================
+-- WHY UPDATE / DELETE SCRIPTS ARE NOT INCLUDED
+-- =========================================================
+-- persons and trainers are core identity records. In a real gym system,
+-- these records should usually be preserved for history, reporting,
+-- attendance, scheduling, and audit consistency.
+--
+-- specializations are catalogue records. If a specialization becomes obsolete,
+-- it should normally be hidden or deactivated at the application level instead
+-- of being deleted from the database.
+--
+-- trainer_specializations may be changed when a trainer gains or loses
+-- a qualification. However, direct UPDATE or DELETE statements are not included
+-- in this seed script because the inserted data is used as stable test data
+-- by other modules.
+--
+-- Example of a possible qualification removal, commented out to preserve seed data:
+-- DELETE FROM gym.trainer_specializations
+-- WHERE trainer_id = 10 AND specialization_id = 3;
 
 
 -- =========================================================
