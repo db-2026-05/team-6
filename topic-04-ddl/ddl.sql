@@ -455,7 +455,9 @@ CREATE TABLE gym.attendance (
     CONSTRAINT fk_attendance_member
         FOREIGN KEY (member_id) REFERENCES gym.members(member_id),
     CONSTRAINT fk_attendance_schedule
-        FOREIGN KEY (class_schedule_id) REFERENCES gym.class_schedule(class_schedule_id)
+        FOREIGN KEY (class_schedule_id) REFERENCES gym.class_schedule(class_schedule_id),
+    CONSTRAINT uq_attendance_member_session
+        UNIQUE (member_id, class_schedule_id)    
 );
 
 -- =========================================================
