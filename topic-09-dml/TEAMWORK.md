@@ -10,7 +10,7 @@
 | Andrew Chernuha | Developer | Added dml request to fill in propper tables | [dml](./dml.sql) |
 | Oleksandr Chura | учасник | INSERT-скрипти для таблиць CLASS AND SCHEDULING MANAGEMENT (rooms, class_templates, class_recurrence_rules, rule_week_days, rule_month_days, class_schedule), валідація constraints (CHECK, UNIQUE, FK, PK) | dml.sql [video](https://drive.google.com/file/d/1-SZiYYvzmxT1N8L9qi7x1BMOlkm4TEdc/view?usp=sharing) |
 | Dmytro Tokariev | Учасник | Додав dml-скрипти для Equipment and Goal Tracking - equipment,goals,progress tables | https://drive.google.com/file/d/1r6V37FMwaK8HlnfyhYpCJ16kWIWFizgM/view?usp=drive_link |
-| ... | ... | ... | ... |
+| Oleh Svyrydenko | учасник | Додав DML-скрипти для Membership Management (memberships, members, members_memberships, attendance), інтегрував командний DML, та виконав тестування в Supabase | dml.sql [video](https://drive.google.com/file/d/1VjLeFKz4Qkeaacxs90NFmeenMwkE5dRc/view?usp=sharing) |
 
 ## Контекст теми
 Кожен учасник працював з конкретними сутностями відповідно до розподілу з Topic 04 (DDL) та відповідав за INSERT-скрипти та валідацію constraints для таблиць.
