@@ -1,20 +1,21 @@
 # TEAMWORK - Topic 09 (SQL DML)
 
 ## Склад команди
-- Команда: ...
-- Варіант предметної області: ...
+- Команда: team 6
+- Варіант предметної області: Fitness Center Management
 
 ## Таблиця внесків
 | Учасник | Роль у команді | Що зроблено | Артефакти / файли |
 |---|---|---|---|
-| ... | ... | ... | ... |
-| ... | ... | ... | ... |
-| ... | ... | ... | ... |
+| Andrew Chernuha | Developer | Added dml request to fill in propper tables | [dml](./dml.sql) |
+| Oleksandr Chura | учасник | INSERT-скрипти для таблиць CLASS AND SCHEDULING MANAGEMENT (rooms, class_templates, class_recurrence_rules, rule_week_days, rule_month_days, class_schedule), валідація constraints (CHECK, UNIQUE, FK, PK) | dml.sql [video](https://drive.google.com/file/d/1-SZiYYvzmxT1N8L9qi7x1BMOlkm4TEdc/view?usp=sharing) |
+| Dmytro Tokariev | Учасник | Додав dml-скрипти для Equipment and Goal Tracking - equipment,goals,progress tables | https://drive.google.com/file/d/1r6V37FMwaK8HlnfyhYpCJ16kWIWFizgM/view?usp=drive_link |
+| Oleh Svyrydenko | учасник | Додав DML-скрипти для Membership Management (memberships, members, members_memberships, attendance), інтегрував командний DML, та виконав тестування в Supabase | dml.sql [video](https://drive.google.com/file/d/1VjLeFKz4Qkeaacxs90NFmeenMwkE5dRc/view?usp=sharing) |
 
 ## Контекст теми
-Опишіть, як розподілили: `INSERT`, `UPDATE`, `DELETE` (кожен робив одну операцію чи працював з конкретними сутностями), підбір реалістичних даних, коментарі до секцій у `dml.sql`, перевірку constraints та узгодженість наборів даних.
+Кожен учасник працював з конкретними сутностями відповідно до розподілу з Topic 04 (DDL) та відповідав за INSERT-скрипти та валідацію constraints для таблиць.
 
 ## Коротке обґрунтування командного підходу
-1. Як ви розподілили таблиці/сценарії наповнення між учасниками: ...
-2. Чому вибрані саме такі тестові дані: ...
-3. Як перевіряли коректність і реалістичність DML-скриптів: ...
+1. Як ви розподілили таблиці/сценарії наповнення між учасниками: аналогічно до Topic 04 — кожен учасник наповнює таблиці зі своєї частини схеми.
+2. Чому вибрані саме такі тестові дані: дані моделюють реалістичну роботу фітнес-центру.
+3. Як перевіряли коректність і реалістичність DML-скриптів: скрипт виконується в PostgreSQL(в Supabase) поверх DDL-схеми; секція constraint validation містить INSERT/DELETE-запити, що мають викликати помилки (CHECK, UNIQUE, FK, PK violations), що підтверджує коректність обмежень.
