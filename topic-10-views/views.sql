@@ -271,3 +271,268 @@ WITH CHECK OPTION;
 -- UPDATE gym.v_scheduled_sessions
 -- SET status = 'cancelled'
 -- WHERE class_schedule_id = 1;
+
+
+-- Task Andre Chernuha
+-- =========================================================
+-- VIEWS — PERSONAL TRAINING MANAGEMENT
+-- RESPONSIBLE ANDREW CHERNUHA
+--
+-- Covers three tables:
+--   gym.personal_training      — one-on-one sessions
+--   gym.trainer_work_schedule  — weekly working hours
+--   gym.trainer_leaves         — leave requests
+-- =========================================================
+
+
+-- =========================================================
+-- 1. HORIZONTAL VIEW
+-- Shows only selected columns from personal_training.
+-- Hides internal IDs — useful for public-facing reports
+-- where session_id is not relevant.
+-- =========================================================
+CREATE OR REPLACE VIEW gym.v_personal_training_public AS
+SELECT
+    member_id,
+    trainer_id,
+    training_date,
+    status
+FROM gym.personal_training;
+
+-- Sample query
+-- SELECT * FROM gym.v_personal_training_public;
+
+
+-- =========================================================
+-- 2. VERTICAL VIEW
+-- Shows only scheduled (upcoming) personal training sessions.
+-- Filters out completed and cancelled rows.
+-- Useful for dashboard widgets showing what's coming up.
+-- =========================================================
+CREATE OR REPLACE VIEW gym.v_personal_training_upcoming AS
+SELECT
+    session_id,
+    member_id,
+    trainer_id,
+    training_date,
+    status
+FROM gym.personal_training
+WHERE status = 'scheduled'
+  AND training_date >= NOW();
+
+-- Sample query
+-- SELECT * FROM gym.v_personal_training_upcoming ORDER BY training_date;
+
+
+-- =========================================================
+-- 3. MIXED VIEW (columns + rows)
+-- Shows approved trainer leaves with only the columns
+-- relevant for scheduling: trainer, dates, and leave type.
+-- Filters out pending and rejected requests.
+-- Used by the scheduling layer to detect trainer unavailability.
+-- =========================================================
+CREATE OR REPLACE VIEW gym.v_approved_leaves AS
+SELECT
+    trainer_id,
+    leave_type,
+    start_date,
+    end_date
+FROM gym.trainer_leaves
+WHERE status = 'approved';
+
+-- Sample query
+-- SELECT * FROM gym.v_approved_leaves ORDER BY start_date;
+
+
+-- =========================================================
+-- 4. JOIN VIEW
+-- Joins personal_training with persons (via members and trainers)
+-- to show full names instead of raw IDs.
+-- Useful for admin panels and printed schedules.
+-- =========================================================
+CREATE OR REPLACE VIEW gym.v_personal_training_full AS
+SELECT
+    pt.session_id,
+    pt.training_date,
+    pt.status,
+
+    -- Member full name
+    mp.first_name || ' ' || mp.last_name AS member_name,
+
+    -- Trainer full name
+    tp.first_name || ' ' || tp.last_name AS trainer_name
+
+FROM gym.personal_training pt
+
+JOIN gym.members  m  ON m.member_id   = pt.member_id
+JOIN gym.persons  mp ON mp.person_id  = m.person_id
+
+JOIN gym.trainers t  ON t.trainer_id  = pt.trainer_id
+JOIN gym.persons  tp ON tp.person_id  = t.person_id;
+
+-- Sample query
+-- SELECT * FROM gym.v_personal_training_full ORDER BY training_date;
+
+
+-- =========================================================
+-- 5. JOIN VIEW — trainer schedule with name
+-- Joins trainer_work_schedule with trainers and persons
+-- to show which days each trainer works, with their full name.
+-- =========================================================
+CREATE OR REPLACE VIEW gym.v_trainer_schedule_full AS
+SELECT
+    tws.work_schedule_id,
+    p.first_name || ' ' || p.last_name AS trainer_name,
+    tws.day_of_week,
+    tws.start_time,
+    tws.end_time,
+    tws.is_active
+FROM gym.trainer_work_schedule tws
+JOIN gym.trainers t ON t.trainer_id = tws.trainer_id
+JOIN gym.persons  p ON p.person_id  = t.person_id;
+
+-- Sample query
+-- SELECT * FROM gym.v_trainer_schedule_full WHERE is_active = TRUE ORDER BY trainer_name, day_of_week;
+
+
+-- =========================================================
+-- 6. SUBQUERY VIEW
+-- Shows trainers who currently have an approved leave
+-- that overlaps with today's date.
+-- Uses a subquery to find trainer_ids from trainer_leaves.
+-- Useful for real-time availability checks.
+-- =========================================================
+CREATE OR REPLACE VIEW gym.v_trainers_on_leave_today AS
+SELECT
+    t.trainer_id,
+    p.first_name || ' ' || p.last_name AS trainer_name,
+    tl.leave_type,
+    tl.start_date,
+    tl.end_date
+FROM gym.trainers t
+JOIN gym.persons p ON p.person_id = t.person_id
+WHERE t.trainer_id IN (
+    SELECT trainer_id
+    FROM gym.trainer_leaves
+    WHERE status = 'approved'
+      AND start_date <= CURRENT_DATE
+      AND (end_date IS NULL OR end_date >= CURRENT_DATE)
+);
+
+-- Sample query
+-- SELECT * FROM gym.v_trainers_on_leave_today;
+
+
+-- =========================================================
+-- 7. SUBQUERY VIEW
+-- Shows trainers who have NO scheduled personal training
+-- sessions in the next 7 days — available for new bookings.
+-- =========================================================
+CREATE OR REPLACE VIEW gym.v_trainers_available_this_week AS
+SELECT
+    t.trainer_id,
+    p.first_name || ' ' || p.last_name AS trainer_name
+FROM gym.trainers t
+JOIN gym.persons p ON p.person_id = t.person_id
+WHERE t.trainer_id NOT IN (
+    SELECT DISTINCT trainer_id
+    FROM gym.personal_training
+    WHERE status = 'scheduled'
+      AND training_date BETWEEN NOW() AND NOW() + INTERVAL '7 days'
+);
+
+-- Sample query
+-- SELECT * FROM gym.v_trainers_available_this_week;
+
+
+-- =========================================================
+-- 8. UNION VIEW
+-- Combines active (scheduled) and past (completed) sessions
+-- into a single unified session log.
+-- Adds a label column to distinguish the two groups.
+-- Useful for member history reports.
+-- =========================================================
+CREATE OR REPLACE VIEW gym.v_personal_training_log AS
+
+    -- Active upcoming sessions
+    SELECT
+        session_id,
+        member_id,
+        trainer_id,
+        training_date,
+        status,
+        'upcoming' AS session_group
+    FROM gym.personal_training
+    WHERE status = 'scheduled'
+      AND training_date >= NOW()
+
+UNION ALL
+
+    -- Past completed sessions
+    SELECT
+        session_id,
+        member_id,
+        trainer_id,
+        training_date,
+        status,
+        'past' AS session_group
+    FROM gym.personal_training
+    WHERE status = 'completed';
+
+-- Sample query
+-- SELECT * FROM gym.v_personal_training_log ORDER BY training_date DESC;
+
+
+-- =========================================================
+-- 9. VIEW ON TOP OF A VIEW
+-- Builds on v_personal_training_full (view #4).
+-- Filters to show only upcoming scheduled sessions
+-- with full names — ready for a booking confirmation screen.
+-- =========================================================
+CREATE OR REPLACE VIEW gym.v_upcoming_sessions_named AS
+SELECT
+    session_id,
+    training_date,
+    member_name,
+    trainer_name,
+    status
+FROM gym.v_personal_training_full
+WHERE status = 'scheduled'
+  AND training_date >= NOW()
+ORDER BY training_date;
+
+-- Sample query
+-- SELECT * FROM gym.v_upcoming_sessions_named;
+
+
+-- =========================================================
+-- 10. CHECK OPTION VIEW
+-- Updatable view that only exposes pending leave requests.
+-- WITH CHECK OPTION prevents inserting or updating a row
+-- into a non-pending status through this view.
+-- Ensures that only pending leaves are managed here —
+-- approved/rejected leaves must be handled elsewhere.
+-- =========================================================
+CREATE OR REPLACE VIEW gym.v_pending_leaves AS
+SELECT
+    leave_id,
+    trainer_id,
+    leave_type,
+    start_date,
+    end_date,
+    notes
+FROM gym.trainer_leaves
+WHERE status = 'pending'
+WITH CHECK OPTION;
+
+-- Sample query
+-- SELECT * FROM gym.v_pending_leaves;
+
+-- Safe UPDATE through the view (status stays pending — allowed):
+-- UPDATE gym.v_pending_leaves SET notes = 'Waiting for approval' WHERE leave_id = 1;
+
+-- This INSERT would be BLOCKED by CHECK OPTION (status not pending):
+-- INSERT INTO gym.v_pending_leaves (trainer_id, leave_type, start_date, end_date, status)
+-- VALUES (1, 'sick', '2024-06-01', '2024-06-05', 'approved');
+
+-- End Andre Chernuhas' task

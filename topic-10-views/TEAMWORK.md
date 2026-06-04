@@ -8,7 +8,7 @@
 | Учасник | Роль у команді | Що зроблено | Артефакти / файли |
 |---|---|---|---|
 | Oleksandr Chura | учасник |  | dml.sql [video](https://drive.google.com/file/d/1CWgATOnAepWzeEMoJDvXIAZryN2rTU7W/view?usp=sharing) |
-| ... | ... | ... | ... |
+| Andrew Chernuha | Developer |  | dml.sql |
 | ... | ... | ... | ... |
 
 ## Контекст теми
