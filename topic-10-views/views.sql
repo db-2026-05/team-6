@@ -536,3 +536,270 @@ WITH CHECK OPTION;
 -- VALUES (1, 'sick', '2024-06-01', '2024-06-05', 'approved');
 
 -- End Andre Chernuhas' task
+
+-- ================================================================
+-- TASK: SQL VIEWS FOR Equipment and Goal Tracking
+-- Author: Dmytro Tokariev
+-- ================================================================
+-- Views built on top of the fitness tracking tables:
+--   gym.equipment, gym.goals, gym.progress
+-- ================================================================
+
+
+-- ================================================================
+-- 1. HORIZONTAL VIEW — select specific columns
+-- ================================================================
+-- Purpose: Provides a simplified equipment inventory showing only
+-- equipment name and current status. Hides maintenance dates and
+-- internal IDs. Useful for front-desk staff who just need to know
+-- what equipment is available.
+-- Relates to: gym.equipment — strips implementation columns.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_equipment_catalogue AS
+SELECT
+    name,
+    status
+FROM gym.equipment;
+
+-- Demo:
+-- SELECT * FROM gym.v_equipment_catalogue;
+
+
+-- ================================================================
+-- 2. VERTICAL VIEW — filter specific rows
+-- ================================================================
+-- Purpose: Shows only equipment that is broken or under repair.
+-- Maintenance staff use this to see what needs immediate attention
+-- without being distracted by available equipment.
+-- Relates to: gym.equipment — filters rows by status condition.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_equipment_needing_repair AS
+SELECT *
+FROM gym.equipment
+WHERE status IN ('broken', 'under_repair');
+
+-- Demo:
+-- SELECT * FROM gym.v_equipment_needing_repair;
+
+
+-- ================================================================
+-- 3. MIXED VIEW — column selection + row filtering
+-- ================================================================
+-- Purpose: Lists active (in_progress) goals with only the columns
+-- relevant for member progress tracking. Filters out completed and
+-- abandoned goals so members see only what they are currently
+-- working toward.
+-- Relates to: gym.goals — combines column projection with
+-- a status filter.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_active_goals AS
+SELECT
+    goal_id,
+    member_id,
+    goal_description,
+    target_value,
+    deadline,
+    status,
+    created_at
+FROM gym.goals
+WHERE status = 'in_progress';
+
+-- Demo:
+-- SELECT * FROM gym.v_active_goals;
+
+
+-- ================================================================
+-- 4. JOIN VIEW — multiple tables
+-- ================================================================
+-- Purpose: Produces a complete progress report by joining goals
+-- with their progress records. Shows each goal alongside its
+-- check-in history. Trainers use this to review member progress
+-- during consultations.
+-- Relates to: gym.goals, gym.progress — combines goal definitions
+-- with actual progress measurements.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_goal_progress_history AS
+SELECT
+    g.goal_id,
+    g.goal_description,
+    g.target_value,
+    g.status AS goal_status,
+    g.deadline,
+    p.current_state,
+    p.check_date,
+    p.notes
+FROM gym.goals g
+LEFT JOIN gym.progress p ON p.goal_id = g.goal_id
+ORDER BY g.goal_id, p.check_date DESC;
+
+-- Demo:
+-- SELECT * FROM gym.v_goal_progress_history;
+
+
+-- ================================================================
+-- 5. SUBQUERY VIEW — uses a subquery
+-- ================================================================
+-- Purpose: Shows goals that have no progress records yet.
+-- Trainers use this to identify goals that were set but never
+-- tracked — these members might need additional motivation.
+-- Relates to: gym.goals, gym.progress — the subquery checks for
+-- absence of any progress row referencing the goal.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_untracked_goals AS
+SELECT
+    goal_id,
+    goal_description,
+    target_value,
+    status,
+    created_at
+FROM gym.goals
+WHERE goal_id NOT IN (
+    SELECT DISTINCT goal_id
+    FROM gym.progress
+);
+
+-- Demo:
+-- SELECT * FROM gym.v_untracked_goals;
+
+
+-- ================================================================
+-- 6. UNION VIEW — combines two result sets
+-- ================================================================
+-- Purpose: Provides a single unified list of all equipment items
+-- that need attention (both broken and under repair), tagged by
+-- urgency level. Maintenance staff use this as their primary
+-- work order list.
+-- Relates to: gym.equipment — UNION filters on two status values
+-- and labels them for priority.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_maintenance_worklist AS
+SELECT
+    equipment_id,
+    name,
+    status,
+    last_maintenance,
+    'HIGH PRIORITY' AS urgency
+FROM gym.equipment
+WHERE status = 'broken'
+
+UNION ALL
+
+SELECT
+    equipment_id,
+    name,
+    status,
+    last_maintenance,
+    'MEDIUM PRIORITY' AS urgency
+FROM gym.equipment
+WHERE status = 'under_repair';
+
+-- Demo:
+-- SELECT * FROM gym.v_maintenance_worklist
+-- ORDER BY urgency DESC;
+
+
+-- ================================================================
+-- 7. VIEW ON VIEW — selects from another view
+-- ================================================================
+-- Purpose: Builds on v_active_goals (view #3) to produce a simple
+-- count of how many active goals each member has. Used on the
+-- member dashboard for a quick overview.
+-- Relates to: gym.v_active_goals — aggregates the active goals
+-- view without re-joining the base table.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_member_goal_counts AS
+SELECT
+    member_id,
+    COUNT(*) AS active_goals_count
+FROM gym.v_active_goals
+GROUP BY member_id;
+
+-- Demo:
+-- SELECT * FROM gym.v_member_goal_counts
+-- ORDER BY active_goals_count DESC;
+
+
+-- ================================================================
+-- 8. UPDATABLE VIEW WITH CHECK OPTION
+-- ================================================================
+-- Purpose: Exposes only available equipment so that front-desk
+-- staff can update maintenance dates directly through the view.
+-- The CHECK OPTION prevents an UPDATE from changing the status
+-- to anything other than 'available', which would move the row
+-- outside the view's scope.
+-- Relates to: gym.equipment — wraps a single table with a
+-- WHERE filter and enforces it on writes.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_available_equipment_updatable AS
+SELECT
+    equipment_id,
+    name,
+    status,
+    last_maintenance
+FROM gym.equipment
+WHERE status = 'available'
+WITH CHECK OPTION;
+
+-- Demo:
+-- The following UPDATE succeeds because the row stays within the view:
+-- UPDATE gym.v_available_equipment_updatable
+-- SET last_maintenance = CURRENT_DATE
+-- WHERE name = 'Treadmill X1';
+--
+-- The following UPDATE would fail because changing status to 'broken'
+-- violates the CHECK OPTION (the row would leave the view):
+-- UPDATE gym.v_available_equipment_updatable
+-- SET status = 'broken'
+-- WHERE name = 'Treadmill X1';
+
+
+-- ================================================================
+-- BONUS: Simple member progress summary
+-- ================================================================
+-- Purpose: Shows each goal with its most recent progress value.
+-- This is the primary view for the member progress page.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_latest_progress AS
+SELECT DISTINCT ON (g.goal_id)
+    g.goal_id,
+    g.member_id,
+    g.goal_description,
+    g.target_value,
+    g.status,
+    p.current_state AS latest_value,
+    p.check_date AS last_checked,
+    p.notes
+FROM gym.goals g
+LEFT JOIN gym.progress p ON p.goal_id = g.goal_id
+ORDER BY g.goal_id, p.check_date DESC NULLS LAST;
+
+-- Demo:
+-- SELECT * FROM gym.v_latest_progress;
+
+
+-- ================================================================
+-- ALL DEMO QUERIES (commented - uncomment for testing)
+-- ================================================================
+
+-- SELECT * FROM gym.v_equipment_catalogue;
+-- SELECT * FROM gym.v_equipment_needing_repair;
+-- SELECT * FROM gym.v_active_goals;
+-- SELECT * FROM gym.v_goal_progress_history LIMIT 20;
+-- SELECT * FROM gym.v_untracked_goals;
+-- SELECT * FROM gym.v_maintenance_worklist;
+-- SELECT * FROM gym.v_member_goal_counts;
+-- SELECT * FROM gym.v_available_equipment_updatable;
+-- SELECT * FROM gym.v_latest_progress;
+
+-- ================================================================
+-- END OF Dmytro VIEWS SCRIPT
+-- ================================================================
