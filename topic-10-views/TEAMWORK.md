@@ -10,6 +10,7 @@
 | Oleksandr Chura | учасник |  | dml.sql [video](https://drive.google.com/file/d/1CWgATOnAepWzeEMoJDvXIAZryN2rTU7W/view?usp=sharing) |
 | Andrew Chernuha | Developer |  | dml.sql |
 | Dmytro Tokariev | Учасник |  | views-goals_progress_equipment.sql |
+| Bohdan Bohelskyi | Учасник |  | views.sql |
 | ... | ... | ... | ... |
 
 ## Контекст теми
