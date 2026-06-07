@@ -7,10 +7,10 @@
 ## Таблиця внесків
 | Учасник | Роль у команді | Що зроблено | Артефакти / файли |
 |---|---|---|---|
-| Oleksandr Chura | учасник |  | dml.sql [video](https://drive.google.com/file/d/1CWgATOnAepWzeEMoJDvXIAZryN2rTU7W/view?usp=sharing) |
-| Andrew Chernuha | Developer |  | dml.sql |
-| Dmytro Tokariev | Учасник |  | views-goals_progress_equipment.sql |
-| Bohdan Bohelskyi | Учасник |  | views.sql |
+| Oleksandr Chura | Учасник | Views для class and schedule management | views.sql, [video](https://drive.google.com/file/d/1CWgATOnAephzEHoJdVXIAZryN2rTU7W/view?usp=sharing) |
+| Andrew Chernuha | Developer | Views implementation | views.sql |
+| Dmytro Tokariev | Учасник | Views implementation | views.sql |
+| Bohdan Bohelskyi | Учасник | Views for persons, trainers, specializations and trainer_specializations | views.sql |
 | ... | ... | ... | ... |
 
 ## Контекст теми
