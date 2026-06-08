@@ -411,7 +411,7 @@ SELECT
     tl.end_date
 FROM gym.trainers t
 JOIN gym.persons p ON p.person_id = t.person_id
-JOIN gym.trainer_leaves tl ON  t.traier_id = t.trainer_id
+JOIN gym.trainer_leaves tl ON  t.trainer_id = tl.trainer_id
 WHERE t.trainer_id IN (
     SELECT trainer_id
     FROM gym.trainer_leaves
@@ -1101,13 +1101,13 @@ WITH CHECK OPTION;
 -- Supports membership sales and pricing operations.
 -- =========================================================
 
-CREATE OR REPLACE VIEW gym.active_memberships_view AS
+CREATE OR REPLACE VIEW gym.v_active_memberships AS
 SELECT *
 FROM gym.memberships
 WHERE valid_to IS NULL;
 
 -- Demo:
--- SELECT * FROM gym.active_memberships_view;
+-- SELECT * FROM gym.v_active_memberships;
 
 
 -- =========================================================
@@ -1117,7 +1117,7 @@ WHERE valid_to IS NULL;
 -- Useful when membership IDs and validity periods are not needed.
 -- =========================================================
 
-CREATE OR REPLACE VIEW gym.membership_prices_view AS
+CREATE OR REPLACE VIEW gym.v_membership_prices AS
 SELECT
     type,
     price,
@@ -1125,7 +1125,7 @@ SELECT
 FROM gym.memberships;
 
 -- Demo:
--- SELECT * FROM gym.membership_prices_view;
+-- SELECT * FROM gym.v_membership_prices;
 
 
 -- =========================================================
@@ -1135,7 +1135,7 @@ FROM gym.memberships;
 -- Combines column selection and row filtering.
 -- =========================================================
 
-CREATE OR REPLACE VIEW gym.premium_memberships_view AS
+CREATE OR REPLACE VIEW gym.v_premium_memberships AS
 SELECT
     membership_id,
     price,
@@ -1145,7 +1145,7 @@ FROM gym.memberships
 WHERE type = 'premium';
 
 -- Demo:
--- SELECT * FROM gym.premium_memberships_view;
+-- SELECT * FROM gym.v_premium_memberships;
 
 
 -- =========================================================
@@ -1156,7 +1156,7 @@ WHERE type = 'premium';
 -- Useful for reporting and membership administration.
 -- =========================================================
 
-CREATE OR REPLACE VIEW gym.member_membership_view AS
+CREATE OR REPLACE VIEW gym.v_member_membership AS
 SELECT
     mm.member_id,
     m.type AS membership_type,
@@ -1169,7 +1169,7 @@ JOIN gym.memberships m
     ON mm.membership_id = m.membership_id;
 
 -- Demo:
--- SELECT * FROM gym.member_membership_view;
+-- SELECT * FROM gym.v_member_membership;
 
 
 -- =========================================================
@@ -1179,7 +1179,7 @@ JOIN gym.memberships m
 -- Demonstrates usage of a subquery inside a view.
 -- =========================================================
 
-CREATE OR REPLACE VIEW gym.member_attendance_summary_view AS
+CREATE OR REPLACE VIEW gym.v_member_attendance_summary AS
 SELECT
     mb.member_id,
     (
@@ -1190,62 +1190,75 @@ SELECT
 FROM gym.members mb;
 
 -- Demo:
--- SELECT * FROM gym.member_attendance_summary_view;
+-- SELECT * FROM gym.v_member_attendance_summary;
 
 
--- =========================================================
--- 6. UNION VIEW
+-- ================================================================
+-- 6. UNION VIEW — Unified Membership History
 -- Purpose:
--- Combines attendance activity and active membership records
--- into a single activity stream.
--- =========================================================
+-- Provides a comprehensive log of all membership periods,
+-- distinguishing between currently active and past (completed) 
+-- subscriptions. This creates a unified chronological history
+-- for each member.
+-- Relates to: gym.members_memberships — separates historical
+-- records by end_date for reporting purposes.
+-- ================================================================
 
-CREATE OR REPLACE VIEW gym.member_activity_view AS
-
-SELECT
-    member_id,
-    'attendance' AS activity_type,
-    status::text AS activity_status
-FROM gym.attendance
+CREATE OR REPLACE VIEW gym.v_membership_history AS
+SELECT 
+    member_id, 
+    start_date, 
+    end_date, 
+    'active' AS status
+FROM gym.members_memberships
+WHERE end_date IS NULL
 
 UNION ALL
 
-SELECT
-    member_id,
-    'membership' AS activity_type,
-    'active' AS activity_status
+SELECT 
+    member_id, 
+    start_date, 
+    end_date, 
+    'completed' AS status
 FROM gym.members_memberships
-WHERE end_date IS NULL;
+WHERE end_date IS NOT NULL;
 
 -- Demo:
--- SELECT * FROM gym.member_activity_view;
+-- SELECT * FROM gym.v_membership_history ORDER BY start_date DESC;
 
 
--- =========================================================
--- 7. VIEW BASED ON ANOTHER VIEW
+-- ================================================================
+-- 7. VIEW BASED ON ANOTHER VIEW — Membership Popularity
 -- Purpose:
--- Uses member_membership_view and shows only members
--- who received a discount.
--- =========================================================
+-- Summarizes the popularity of different membership types by 
+-- aggregating data from the v_member_membership view.
+-- Managers use this to identify the most successful plans.
+-- Relates to: gym.v_member_membership — builds an analytical 
+-- layer on top of an existing join-based view.
+-- ================================================================
 
-CREATE OR REPLACE VIEW gym.discounted_members_view AS
-SELECT *
-FROM gym.member_membership_view
-WHERE discount > 0;
+CREATE OR REPLACE VIEW gym.v_membership_popularity AS
+SELECT 
+    membership_type, 
+    COUNT(*) AS total_subscriptions
+FROM gym.v_member_membership
+GROUP BY membership_type
+ORDER BY total_subscriptions DESC;
 
 -- Demo:
--- SELECT * FROM gym.discounted_members_view;
+-- SELECT * FROM gym.v_membership_popularity;
 
 
 -- =========================================================
 -- 8. UPDATABLE VIEW WITH CHECK OPTION
 -- Purpose:
 -- Allows updates only for active membership products.
--- CHECK OPTION prevents updates that would make a row
--- disappear from the view.
+-- WITH CHECK OPTION prevents INSERT/UPDATE operations that would 
+-- make a row disappear from the view (i.e., setting valid_to to a 
+-- non-NULL value).
 -- =========================================================
 
-CREATE OR REPLACE VIEW gym.current_memberships_view AS
+CREATE OR REPLACE VIEW gym.v_current_memberships AS
 SELECT *
 FROM gym.memberships
 WHERE valid_to IS NULL
@@ -1253,22 +1266,18 @@ WITH CHECK OPTION;
 
 /* Demo:
 
-SELECT * FROM gym.current_memberships_view;
+SELECT * FROM gym.v_current_memberships;
 
 Allowed:
 
-UPDATE gym.current_memberships_view
+UPDATE gym.v_current_memberships
 SET price = 1300
 WHERE membership_id = 3;
 
 Rejected:
 
-UPDATE gym.current_memberships_view
+UPDATE gym.v_current_memberships
 SET valid_to = CURRENT_DATE
 WHERE membership_id = 3;
 
 */
-
--- =========================================================
--- END OF MEMBERSHIP MANAGEMENT VIEWS
--- =========================================================
