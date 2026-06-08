@@ -411,6 +411,7 @@ SELECT
     tl.end_date
 FROM gym.trainers t
 JOIN gym.persons p ON p.person_id = t.person_id
+JOIN gym.trainer_leaves tl ON  t.traier_id = t.trainer_id
 WHERE t.trainer_id IN (
     SELECT trainer_id
     FROM gym.trainer_leaves
