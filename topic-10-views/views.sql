@@ -803,3 +803,193 @@ ORDER BY g.goal_id, p.check_date DESC NULLS LAST;
 -- ================================================================
 -- END OF Dmytro VIEWS SCRIPT
 -- ================================================================
+-- =========================================================
+-- MEMBERSHIP MANAGEMENT VIEWS
+-- Responsible: Oleh Svyrydenko
+-- =========================================================
+-- Covers:
+-- - memberships
+-- - members
+-- - members_memberships
+-- - attendance
+-- =========================================================
+
+
+-- =========================================================
+-- 1. HORIZONTAL VIEW
+-- Purpose:
+-- Shows only active membership products.
+-- Supports membership sales and pricing operations.
+-- =========================================================
+
+CREATE OR REPLACE VIEW gym.active_memberships_view AS
+SELECT *
+FROM gym.memberships
+WHERE valid_to IS NULL;
+
+-- Demo:
+-- SELECT * FROM gym.active_memberships_view;
+
+
+-- =========================================================
+-- 2. VERTICAL VIEW
+-- Purpose:
+-- Exposes only pricing information for memberships.
+-- Useful when membership IDs and validity periods are not needed.
+-- =========================================================
+
+CREATE OR REPLACE VIEW gym.membership_prices_view AS
+SELECT
+    type,
+    price,
+    currency
+FROM gym.memberships;
+
+-- Demo:
+-- SELECT * FROM gym.membership_prices_view;
+
+
+-- =========================================================
+-- 3. MIXED VIEW
+-- Purpose:
+-- Shows selected columns for premium memberships only.
+-- Combines column selection and row filtering.
+-- =========================================================
+
+CREATE OR REPLACE VIEW gym.premium_memberships_view AS
+SELECT
+    membership_id,
+    price,
+    currency,
+    valid_from
+FROM gym.memberships
+WHERE type = 'premium';
+
+-- Demo:
+-- SELECT * FROM gym.premium_memberships_view;
+
+
+-- =========================================================
+-- 4. JOIN VIEW
+-- Purpose:
+-- Combines membership enrollment records with membership
+-- product information.
+-- Useful for reporting and membership administration.
+-- =========================================================
+
+CREATE OR REPLACE VIEW gym.member_membership_view AS
+SELECT
+    mm.member_id,
+    m.type AS membership_type,
+    m.price,
+    mm.discount,
+    mm.start_date,
+    mm.end_date
+FROM gym.members_memberships mm
+JOIN gym.memberships m
+    ON mm.membership_id = m.membership_id;
+
+-- Demo:
+-- SELECT * FROM gym.member_membership_view;
+
+
+-- =========================================================
+-- 5. SUBQUERY VIEW
+-- Purpose:
+-- Shows the number of attendance records for each member.
+-- Demonstrates usage of a subquery inside a view.
+-- =========================================================
+
+CREATE OR REPLACE VIEW gym.member_attendance_summary_view AS
+SELECT
+    mb.member_id,
+    (
+        SELECT COUNT(*)
+        FROM gym.attendance a
+        WHERE a.member_id = mb.member_id
+    ) AS attendance_count
+FROM gym.members mb;
+
+-- Demo:
+-- SELECT * FROM gym.member_attendance_summary_view;
+
+
+-- =========================================================
+-- 6. UNION VIEW
+-- Purpose:
+-- Combines attendance activity and active membership records
+-- into a single activity stream.
+-- =========================================================
+
+CREATE OR REPLACE VIEW gym.member_activity_view AS
+
+SELECT
+    member_id,
+    'attendance' AS activity_type,
+    status::text AS activity_status
+FROM gym.attendance
+
+UNION ALL
+
+SELECT
+    member_id,
+    'membership' AS activity_type,
+    'active' AS activity_status
+FROM gym.members_memberships
+WHERE end_date IS NULL;
+
+-- Demo:
+-- SELECT * FROM gym.member_activity_view;
+
+
+-- =========================================================
+-- 7. VIEW BASED ON ANOTHER VIEW
+-- Purpose:
+-- Uses member_membership_view and shows only members
+-- who received a discount.
+-- =========================================================
+
+CREATE OR REPLACE VIEW gym.discounted_members_view AS
+SELECT *
+FROM gym.member_membership_view
+WHERE discount > 0;
+
+-- Demo:
+-- SELECT * FROM gym.discounted_members_view;
+
+
+-- =========================================================
+-- 8. UPDATABLE VIEW WITH CHECK OPTION
+-- Purpose:
+-- Allows updates only for active membership products.
+-- CHECK OPTION prevents updates that would make a row
+-- disappear from the view.
+-- =========================================================
+
+CREATE OR REPLACE VIEW gym.current_memberships_view AS
+SELECT *
+FROM gym.memberships
+WHERE valid_to IS NULL
+WITH CHECK OPTION;
+
+/* Demo:
+
+SELECT * FROM gym.current_memberships_view;
+
+Allowed:
+
+UPDATE gym.current_memberships_view
+SET price = 1300
+WHERE membership_id = 3;
+
+Rejected:
+
+UPDATE gym.current_memberships_view
+SET valid_to = CURRENT_DATE
+WHERE membership_id = 3;
+
+*/
+
+-- =========================================================
+-- END OF MEMBERSHIP MANAGEMENT VIEWS
+-- =========================================================
