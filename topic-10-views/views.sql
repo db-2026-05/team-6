@@ -803,6 +803,284 @@ ORDER BY g.goal_id, p.check_date DESC NULLS LAST;
 -- ================================================================
 -- END OF Dmytro VIEWS SCRIPT
 -- ================================================================
+
+-- ================================================================
+-- SQL VIEWS FOR PERSON AND TRAINER SPECIALIZATIONS
+-- Author: Bohdan Bohelskyi
+-- ================================================================
+-- Views built on top of the identity and trainer qualification tables:
+--   gym.persons, gym.trainers, gym.specializations,
+--   gym.trainer_specializations
+-- ================================================================
+
+
+-- ================================================================
+-- 1. HORIZONTAL VIEW — select specific columns
+-- ================================================================
+-- Purpose: Provides a safe public person directory with only basic
+-- identity fields. It hides contact details and birth dates, which
+-- are not needed for most role-selection screens.
+-- Relates to: gym.persons — exposes only non-sensitive columns from
+-- the base identity table shared by members and trainers.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_person_public_directory AS
+SELECT
+    person_id,
+    first_name,
+    last_name
+FROM gym.persons;
+
+-- Demo:
+-- SELECT * FROM gym.v_person_public_directory;
+
+
+-- ================================================================
+-- 2. VERTICAL VIEW — filter specific rows
+-- ================================================================
+-- Purpose: Shows trainers hired during the current calendar year.
+-- HR staff can use it to review new employees without scanning the
+-- full trainers table.
+-- Relates to: gym.trainers — filters trainer rows by hire_date.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_trainers_hired_this_year AS
+SELECT
+    trainer_id,
+    person_id,
+    hire_date
+FROM gym.trainers
+WHERE hire_date >= DATE_TRUNC('year', CURRENT_DATE)::date;
+
+-- Demo:
+-- SELECT * FROM gym.v_trainers_hired_this_year
+-- ORDER BY hire_date DESC;
+
+
+-- ================================================================
+-- 3. MIXED VIEW — column selection + row filtering
+-- ================================================================
+-- Purpose: Shows only persons who have an email address, exposing
+-- only contact-related columns needed by the communication layer.
+-- Relates to: gym.persons — combines column projection with a row
+-- filter on optional email data.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_email_contact_persons AS
+SELECT
+    person_id,
+    first_name || ' ' || last_name AS full_name,
+    email,
+    phone
+FROM gym.persons
+WHERE email IS NOT NULL;
+
+-- Demo:
+-- SELECT * FROM gym.v_email_contact_persons;
+
+
+-- ================================================================
+-- 4. JOIN VIEW — multiple tables
+-- ================================================================
+-- Purpose: Produces readable trainer profiles by joining trainer
+-- employment data with the base person identity record.
+-- Relates to: gym.trainers and gym.persons — trainers extend persons
+-- through a one-to-one relationship, and this view hides that join
+-- from application queries.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_trainer_profiles AS
+SELECT
+    t.trainer_id,
+    p.person_id,
+    p.first_name,
+    p.last_name,
+    p.first_name || ' ' || p.last_name AS trainer_name,
+    p.email,
+    p.phone,
+    t.hire_date
+FROM gym.trainers AS t
+JOIN gym.persons AS p ON p.person_id = t.person_id;
+
+-- Demo:
+-- SELECT * FROM gym.v_trainer_profiles
+-- ORDER BY trainer_name;
+
+
+-- ================================================================
+-- 5. SUBQUERY VIEW — uses a subquery
+-- ================================================================
+-- Purpose: Shows trainers who do not have any specialization assigned.
+-- Managers can use it as a data-quality checklist before publishing
+-- trainer profiles or assigning classes.
+-- Relates to: gym.trainers, gym.persons, gym.trainer_specializations —
+-- the NOT EXISTS subquery checks the many-to-many junction table.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_trainers_without_specializations AS
+SELECT
+    t.trainer_id,
+    p.person_id,
+    p.first_name || ' ' || p.last_name AS trainer_name,
+    t.hire_date
+FROM gym.trainers AS t
+JOIN gym.persons AS p ON p.person_id = t.person_id
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM gym.trainer_specializations AS ts
+    WHERE ts.trainer_id = t.trainer_id
+);
+
+-- Demo:
+-- SELECT * FROM gym.v_trainers_without_specializations;
+
+
+-- ================================================================
+-- 6. UNION VIEW — combines two result sets
+-- ================================================================
+-- Purpose: Provides a unified person directory grouped by whether
+-- a person is registered as a trainer or not. This is useful for
+-- admin screens that select people for trainer assignment.
+-- Relates to: gym.persons and gym.trainers — shows the role extension
+-- built on top of the base person table.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_person_trainer_role_directory AS
+SELECT
+    p.person_id,
+    p.first_name || ' ' || p.last_name AS full_name,
+    'trainer' AS role_group
+FROM gym.persons AS p
+JOIN gym.trainers AS t ON t.person_id = p.person_id
+
+UNION ALL
+
+SELECT
+    p.person_id,
+    p.first_name || ' ' || p.last_name AS full_name,
+    'not_trainer' AS role_group
+FROM gym.persons AS p
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM gym.trainers AS t
+    WHERE t.person_id = p.person_id
+);
+
+-- Demo:
+-- SELECT * FROM gym.v_person_trainer_role_directory
+-- ORDER BY role_group, full_name;
+
+
+-- ================================================================
+-- 7. DETAILED JOIN VIEW — trainer specialization details
+-- ================================================================
+-- Purpose: Shows one row per trainer-specialization pair. Trainers
+-- without assigned specializations are still included with NULL
+-- specialization fields, because of LEFT JOIN.
+-- Relates to: gym.trainers, gym.persons, gym.trainer_specializations,
+-- gym.specializations — resolves the many-to-many trainer qualification
+-- model into a readable report.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_trainer_specialization_details AS
+SELECT
+    t.trainer_id,
+    p.person_id,
+    p.first_name || ' ' || p.last_name AS trainer_name,
+    t.hire_date,
+    s.specialization_id,
+    s.specialization_name
+FROM gym.trainers AS t
+JOIN gym.persons AS p ON p.person_id = t.person_id
+LEFT JOIN gym.trainer_specializations AS ts
+    ON ts.trainer_id = t.trainer_id
+LEFT JOIN gym.specializations AS s
+    ON s.specialization_id = ts.specialization_id;
+
+-- Demo:
+-- SELECT * FROM gym.v_trainer_specialization_details
+-- ORDER BY trainer_name, specialization_name;
+
+
+-- ================================================================
+-- 8. VIEW ON VIEW — selects from another view
+-- ================================================================
+-- Purpose: Builds on v_trainer_specialization_details to summarize
+-- each trainer into one row with the number and list of their
+-- specializations.
+-- Relates to: gym.v_trainer_specialization_details — reuses the
+-- detailed trainer-specialization view instead of repeating joins.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_trainer_specialization_summary AS
+SELECT
+    trainer_id,
+    person_id,
+    trainer_name,
+    hire_date,
+    COUNT(specialization_id) AS specialization_count,
+    COALESCE(
+        STRING_AGG(specialization_name, ', ' ORDER BY specialization_name)
+            FILTER (WHERE specialization_name IS NOT NULL),
+        'No specialization assigned'
+    ) AS specializations
+FROM gym.v_trainer_specialization_details
+GROUP BY
+    trainer_id,
+    person_id,
+    trainer_name,
+    hire_date;
+
+-- Demo:
+-- SELECT * FROM gym.v_trainer_specialization_summary
+-- ORDER BY specialization_count DESC, trainer_name;
+
+
+-- ================================================================
+-- 9. UPDATABLE VIEW WITH CHECK OPTION
+-- ================================================================
+-- Purpose: Exposes specialization rows with non-empty names for safe
+-- catalogue maintenance. WITH CHECK OPTION prevents inserting or
+-- updating a specialization through this view into an empty name,
+-- keeping the specialization catalogue clean.
+-- Relates to: gym.specializations — wraps a single table with a
+-- validation filter and enforces it on writes.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_valid_specializations_updatable AS
+SELECT
+    specialization_id,
+    specialization_name
+FROM gym.specializations
+WHERE LENGTH(TRIM(specialization_name)) > 0
+WITH CHECK OPTION;
+
+-- Demo:
+-- The following UPDATE succeeds because the row stays within the view:
+-- UPDATE gym.v_valid_specializations_updatable
+-- SET specialization_name = 'Functional Training'
+-- WHERE specialization_id = 1;
+--
+-- The following UPDATE would fail because an empty name violates
+-- the CHECK OPTION:
+-- UPDATE gym.v_valid_specializations_updatable
+-- SET specialization_name = ''
+-- WHERE specialization_id = 1;
+
+
+-- ================================================================
+-- ALL DEMO QUERIES FOR BOHDAN'S VIEWS
+-- ================================================================
+-- SELECT * FROM gym.v_person_public_directory;
+-- SELECT * FROM gym.v_trainers_hired_this_year ORDER BY hire_date DESC;
+-- SELECT * FROM gym.v_email_contact_persons;
+-- SELECT * FROM gym.v_trainer_profiles ORDER BY trainer_name;
+-- SELECT * FROM gym.v_trainers_without_specializations;
+-- SELECT * FROM gym.v_person_trainer_role_directory ORDER BY role_group, full_name;
+-- SELECT * FROM gym.v_trainer_specialization_details ORDER BY trainer_name, specialization_name;
+-- SELECT * FROM gym.v_trainer_specialization_summary ORDER BY specialization_count DESC, trainer_name;
+-- SELECT * FROM gym.v_valid_specializations_updatable;
+
 -- =========================================================
 -- MEMBERSHIP MANAGEMENT VIEWS
 -- Responsible: Oleh Svyrydenko
@@ -932,6 +1210,130 @@ FROM gym.attendance
 UNION ALL
 
 SELECT
+    p.person_id,
+    p.first_name || ' ' || p.last_name AS full_name,
+    'not_trainer' AS role_group
+FROM gym.persons AS p
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM gym.trainers AS t
+    WHERE t.person_id = p.person_id
+);
+
+-- Demo:
+-- SELECT * FROM gym.v_person_trainer_role_directory
+-- ORDER BY role_group, full_name;
+
+
+-- ================================================================
+-- 7. DETAILED JOIN VIEW — trainer specialization details
+-- ================================================================
+-- Purpose: Shows one row per trainer-specialization pair. Trainers
+-- without assigned specializations are still included with NULL
+-- specialization fields, because of LEFT JOIN.
+-- Relates to: gym.trainers, gym.persons, gym.trainer_specializations,
+-- gym.specializations — resolves the many-to-many trainer qualification
+-- model into a readable report.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_trainer_specialization_details AS
+SELECT
+    t.trainer_id,
+    p.person_id,
+    p.first_name || ' ' || p.last_name AS trainer_name,
+    t.hire_date,
+    s.specialization_id,
+    s.specialization_name
+FROM gym.trainers AS t
+JOIN gym.persons AS p ON p.person_id = t.person_id
+LEFT JOIN gym.trainer_specializations AS ts
+    ON ts.trainer_id = t.trainer_id
+LEFT JOIN gym.specializations AS s
+    ON s.specialization_id = ts.specialization_id;
+
+-- Demo:
+-- SELECT * FROM gym.v_trainer_specialization_details
+-- ORDER BY trainer_name, specialization_name;
+
+
+-- ================================================================
+-- 8. VIEW ON VIEW — selects from another view
+-- ================================================================
+-- Purpose: Builds on v_trainer_specialization_details to summarize
+-- each trainer into one row with the number and list of their
+-- specializations.
+-- Relates to: gym.v_trainer_specialization_details — reuses the
+-- detailed trainer-specialization view instead of repeating joins.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_trainer_specialization_summary AS
+SELECT
+    trainer_id,
+    person_id,
+    trainer_name,
+    hire_date,
+    COUNT(specialization_id) AS specialization_count,
+    COALESCE(
+        STRING_AGG(specialization_name, ', ' ORDER BY specialization_name)
+            FILTER (WHERE specialization_name IS NOT NULL),
+        'No specialization assigned'
+    ) AS specializations
+FROM gym.v_trainer_specialization_details
+GROUP BY
+    trainer_id,
+    person_id,
+    trainer_name,
+    hire_date;
+
+-- Demo:
+-- SELECT * FROM gym.v_trainer_specialization_summary
+-- ORDER BY specialization_count DESC, trainer_name;
+
+
+-- ================================================================
+-- 9. UPDATABLE VIEW WITH CHECK OPTION
+-- ================================================================
+-- Purpose: Exposes specialization rows with non-empty names for safe
+-- catalogue maintenance. WITH CHECK OPTION prevents inserting or
+-- updating a specialization through this view into an empty name,
+-- keeping the specialization catalogue clean.
+-- Relates to: gym.specializations — wraps a single table with a
+-- validation filter and enforces it on writes.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_valid_specializations_updatable AS
+SELECT
+    specialization_id,
+    specialization_name
+FROM gym.specializations
+WHERE LENGTH(TRIM(specialization_name)) > 0
+WITH CHECK OPTION;
+
+-- Demo:
+-- The following UPDATE succeeds because the row stays within the view:
+-- UPDATE gym.v_valid_specializations_updatable
+-- SET specialization_name = 'Functional Training'
+-- WHERE specialization_id = 1;
+--
+-- The following UPDATE would fail because an empty name violates
+-- the CHECK OPTION:
+-- UPDATE gym.v_valid_specializations_updatable
+-- SET specialization_name = ''
+-- WHERE specialization_id = 1;
+
+
+-- ================================================================
+-- ALL DEMO QUERIES FOR BOHDAN'S VIEWS
+-- ================================================================
+-- SELECT * FROM gym.v_person_public_directory;
+-- SELECT * FROM gym.v_trainers_hired_this_year ORDER BY hire_date DESC;
+-- SELECT * FROM gym.v_email_contact_persons;
+-- SELECT * FROM gym.v_trainer_profiles ORDER BY trainer_name;
+-- SELECT * FROM gym.v_trainers_without_specializations;
+-- SELECT * FROM gym.v_person_trainer_role_directory ORDER BY role_group, full_name;
+-- SELECT * FROM gym.v_trainer_specialization_details ORDER BY trainer_name, specialization_name;
+-- SELECT * FROM gym.v_trainer_specialization_summary ORDER BY specialization_count DESC, trainer_name;
+-- SELECT * FROM gym.v_valid_specializations_updatable;
     member_id,
     'membership' AS activity_type,
     'active' AS activity_status
