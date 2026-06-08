@@ -1080,3 +1080,318 @@ WITH CHECK OPTION;
 -- SELECT * FROM gym.v_trainer_specialization_details ORDER BY trainer_name, specialization_name;
 -- SELECT * FROM gym.v_trainer_specialization_summary ORDER BY specialization_count DESC, trainer_name;
 -- SELECT * FROM gym.v_valid_specializations_updatable;
+
+-- =========================================================
+-- MEMBERSHIP MANAGEMENT VIEWS
+-- Responsible: Oleh Svyrydenko
+-- =========================================================
+-- Covers:
+-- - memberships
+-- - members
+-- - members_memberships
+-- - attendance
+-- =========================================================
+
+
+-- =========================================================
+-- 1. HORIZONTAL VIEW
+-- Purpose:
+-- Shows only active membership products.
+-- Supports membership sales and pricing operations.
+-- =========================================================
+
+CREATE OR REPLACE VIEW gym.active_memberships_view AS
+SELECT *
+FROM gym.memberships
+WHERE valid_to IS NULL;
+
+-- Demo:
+-- SELECT * FROM gym.active_memberships_view;
+
+
+-- =========================================================
+-- 2. VERTICAL VIEW
+-- Purpose:
+-- Exposes only pricing information for memberships.
+-- Useful when membership IDs and validity periods are not needed.
+-- =========================================================
+
+CREATE OR REPLACE VIEW gym.membership_prices_view AS
+SELECT
+    type,
+    price,
+    currency
+FROM gym.memberships;
+
+-- Demo:
+-- SELECT * FROM gym.membership_prices_view;
+
+
+-- =========================================================
+-- 3. MIXED VIEW
+-- Purpose:
+-- Shows selected columns for premium memberships only.
+-- Combines column selection and row filtering.
+-- =========================================================
+
+CREATE OR REPLACE VIEW gym.premium_memberships_view AS
+SELECT
+    membership_id,
+    price,
+    currency,
+    valid_from
+FROM gym.memberships
+WHERE type = 'premium';
+
+-- Demo:
+-- SELECT * FROM gym.premium_memberships_view;
+
+
+-- =========================================================
+-- 4. JOIN VIEW
+-- Purpose:
+-- Combines membership enrollment records with membership
+-- product information.
+-- Useful for reporting and membership administration.
+-- =========================================================
+
+CREATE OR REPLACE VIEW gym.member_membership_view AS
+SELECT
+    mm.member_id,
+    m.type AS membership_type,
+    m.price,
+    mm.discount,
+    mm.start_date,
+    mm.end_date
+FROM gym.members_memberships mm
+JOIN gym.memberships m
+    ON mm.membership_id = m.membership_id;
+
+-- Demo:
+-- SELECT * FROM gym.member_membership_view;
+
+
+-- =========================================================
+-- 5. SUBQUERY VIEW
+-- Purpose:
+-- Shows the number of attendance records for each member.
+-- Demonstrates usage of a subquery inside a view.
+-- =========================================================
+
+CREATE OR REPLACE VIEW gym.member_attendance_summary_view AS
+SELECT
+    mb.member_id,
+    (
+        SELECT COUNT(*)
+        FROM gym.attendance a
+        WHERE a.member_id = mb.member_id
+    ) AS attendance_count
+FROM gym.members mb;
+
+-- Demo:
+-- SELECT * FROM gym.member_attendance_summary_view;
+
+
+-- =========================================================
+-- 6. UNION VIEW
+-- Purpose:
+-- Combines attendance activity and active membership records
+-- into a single activity stream.
+-- =========================================================
+
+CREATE OR REPLACE VIEW gym.member_activity_view AS
+
+SELECT
+    member_id,
+    'attendance' AS activity_type,
+    status::text AS activity_status
+FROM gym.attendance
+
+UNION ALL
+
+SELECT
+    p.person_id,
+    p.first_name || ' ' || p.last_name AS full_name,
+    'not_trainer' AS role_group
+FROM gym.persons AS p
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM gym.trainers AS t
+    WHERE t.person_id = p.person_id
+);
+
+-- Demo:
+-- SELECT * FROM gym.v_person_trainer_role_directory
+-- ORDER BY role_group, full_name;
+
+
+-- ================================================================
+-- 7. DETAILED JOIN VIEW — trainer specialization details
+-- ================================================================
+-- Purpose: Shows one row per trainer-specialization pair. Trainers
+-- without assigned specializations are still included with NULL
+-- specialization fields, because of LEFT JOIN.
+-- Relates to: gym.trainers, gym.persons, gym.trainer_specializations,
+-- gym.specializations — resolves the many-to-many trainer qualification
+-- model into a readable report.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_trainer_specialization_details AS
+SELECT
+    t.trainer_id,
+    p.person_id,
+    p.first_name || ' ' || p.last_name AS trainer_name,
+    t.hire_date,
+    s.specialization_id,
+    s.specialization_name
+FROM gym.trainers AS t
+JOIN gym.persons AS p ON p.person_id = t.person_id
+LEFT JOIN gym.trainer_specializations AS ts
+    ON ts.trainer_id = t.trainer_id
+LEFT JOIN gym.specializations AS s
+    ON s.specialization_id = ts.specialization_id;
+
+-- Demo:
+-- SELECT * FROM gym.v_trainer_specialization_details
+-- ORDER BY trainer_name, specialization_name;
+
+
+-- ================================================================
+-- 8. VIEW ON VIEW — selects from another view
+-- ================================================================
+-- Purpose: Builds on v_trainer_specialization_details to summarize
+-- each trainer into one row with the number and list of their
+-- specializations.
+-- Relates to: gym.v_trainer_specialization_details — reuses the
+-- detailed trainer-specialization view instead of repeating joins.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_trainer_specialization_summary AS
+SELECT
+    trainer_id,
+    person_id,
+    trainer_name,
+    hire_date,
+    COUNT(specialization_id) AS specialization_count,
+    COALESCE(
+        STRING_AGG(specialization_name, ', ' ORDER BY specialization_name)
+            FILTER (WHERE specialization_name IS NOT NULL),
+        'No specialization assigned'
+    ) AS specializations
+FROM gym.v_trainer_specialization_details
+GROUP BY
+    trainer_id,
+    person_id,
+    trainer_name,
+    hire_date;
+
+-- Demo:
+-- SELECT * FROM gym.v_trainer_specialization_summary
+-- ORDER BY specialization_count DESC, trainer_name;
+
+
+-- ================================================================
+-- 9. UPDATABLE VIEW WITH CHECK OPTION
+-- ================================================================
+-- Purpose: Exposes specialization rows with non-empty names for safe
+-- catalogue maintenance. WITH CHECK OPTION prevents inserting or
+-- updating a specialization through this view into an empty name,
+-- keeping the specialization catalogue clean.
+-- Relates to: gym.specializations — wraps a single table with a
+-- validation filter and enforces it on writes.
+-- ================================================================
+
+CREATE OR REPLACE VIEW gym.v_valid_specializations_updatable AS
+SELECT
+    specialization_id,
+    specialization_name
+FROM gym.specializations
+WHERE LENGTH(TRIM(specialization_name)) > 0
+WITH CHECK OPTION;
+
+-- Demo:
+-- The following UPDATE succeeds because the row stays within the view:
+-- UPDATE gym.v_valid_specializations_updatable
+-- SET specialization_name = 'Functional Training'
+-- WHERE specialization_id = 1;
+--
+-- The following UPDATE would fail because an empty name violates
+-- the CHECK OPTION:
+-- UPDATE gym.v_valid_specializations_updatable
+-- SET specialization_name = ''
+-- WHERE specialization_id = 1;
+
+
+-- ================================================================
+-- ALL DEMO QUERIES FOR BOHDAN'S VIEWS
+-- ================================================================
+-- SELECT * FROM gym.v_person_public_directory;
+-- SELECT * FROM gym.v_trainers_hired_this_year ORDER BY hire_date DESC;
+-- SELECT * FROM gym.v_email_contact_persons;
+-- SELECT * FROM gym.v_trainer_profiles ORDER BY trainer_name;
+-- SELECT * FROM gym.v_trainers_without_specializations;
+-- SELECT * FROM gym.v_person_trainer_role_directory ORDER BY role_group, full_name;
+-- SELECT * FROM gym.v_trainer_specialization_details ORDER BY trainer_name, specialization_name;
+-- SELECT * FROM gym.v_trainer_specialization_summary ORDER BY specialization_count DESC, trainer_name;
+-- SELECT * FROM gym.v_valid_specializations_updatable;
+    member_id,
+    'membership' AS activity_type,
+    'active' AS activity_status
+FROM gym.members_memberships
+WHERE end_date IS NULL;
+
+-- Demo:
+-- SELECT * FROM gym.member_activity_view;
+
+
+-- =========================================================
+-- 7. VIEW BASED ON ANOTHER VIEW
+-- Purpose:
+-- Uses member_membership_view and shows only members
+-- who received a discount.
+-- =========================================================
+
+CREATE OR REPLACE VIEW gym.discounted_members_view AS
+SELECT *
+FROM gym.member_membership_view
+WHERE discount > 0;
+
+-- Demo:
+-- SELECT * FROM gym.discounted_members_view;
+
+
+-- =========================================================
+-- 8. UPDATABLE VIEW WITH CHECK OPTION
+-- Purpose:
+-- Allows updates only for active membership products.
+-- CHECK OPTION prevents updates that would make a row
+-- disappear from the view.
+-- =========================================================
+
+CREATE OR REPLACE VIEW gym.current_memberships_view AS
+SELECT *
+FROM gym.memberships
+WHERE valid_to IS NULL
+WITH CHECK OPTION;
+
+/* Demo:
+
+SELECT * FROM gym.current_memberships_view;
+
+Allowed:
+
+UPDATE gym.current_memberships_view
+SET price = 1300
+WHERE membership_id = 3;
+
+Rejected:
+
+UPDATE gym.current_memberships_view
+SET valid_to = CURRENT_DATE
+WHERE membership_id = 3;
+
+*/
+
+-- =========================================================
+-- END OF MEMBERSHIP MANAGEMENT VIEWS
+-- =========================================================

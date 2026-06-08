@@ -11,7 +11,7 @@
 | Andrew Chernuha | Developer | Views implementation | views.sql |
 | Dmytro Tokariev | Учасник | Views implementation | views.sql |
 | Bohdan Bohelskyi | Учасник | Views for persons, trainers, specializations and trainer_specializations | views.sql |
-| ... | ... | ... | ... |
+| Oleh Svyrydenko | Учасник | Views для Membership Management (members, memberships, members_memberships, attendance) | views.sql [video](https://drive.google.com/file/d/1G0f0sNVe98xcdi8nBMFDdXgnCBKc1FSN/view?usp=sharing) |
 
 ## Контекст теми
 Кожен учасник працював з конкретними сутностями відповідно до розподілу з Topic 04 (DDL) та відповідав за Views повʼязані з його сутностями.
