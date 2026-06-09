@@ -60,7 +60,7 @@
 
 REVOKE ALL ON SCHEMA gym FROM PUBLIC;
 REVOKE ALL ON ALL TABLES IN SCHEMA gym FROM PUBLIC;
--- Clearing PUBLIC privileges: add for SEQUENCES and TYPES
+-- Revoke default PUBLIC privileges from SEQUENCES and FUNCTIONS
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA gym FROM PUBLIC;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA gym FROM PUBLIC;
 
@@ -107,6 +107,15 @@ CREATE ROLE gym_admin NOLOGIN CREATEROLE;
 -- 3. GRANT PERMISSIONS TO ROLES
 -- ================================================================
 
+-- NOTE ON TABLE VISIBILITY AND EXISTENCE:
+-- Grants are applied to all tables within the gym schema.
+-- At the time of this script execution, all 20 schema tables must exist:
+-- MVP tables: persons, members, trainers, memberships, members_memberships, 
+--             class_templates, class_recurrence_rules, rule_week_days, rule_month_days,
+--             class_schedule, attendance, rooms
+-- Final tables: equipment, specializations, trainer_specializations, trainer_work_schedule,
+--               trainer_leaves, personal_training, goals, progress
+
 -- ----------------------------------------------------------------
 -- 3a. gym_tester — SELECT only
 -- ----------------------------------------------------------------
@@ -115,6 +124,13 @@ CREATE ROLE gym_admin NOLOGIN CREATEROLE;
 -- ----------------------------------------------------------------
 GRANT USAGE ON SCHEMA gym TO gym_tester;
 GRANT SELECT ON ALL TABLES IN SCHEMA gym TO gym_tester;
+
+-- Grant usage on custom ENUM types to tester for visibility
+GRANT USAGE ON TYPE gym.recurrence_frequency TO gym_tester;
+GRANT USAGE ON TYPE gym.day_of_week TO gym_tester;
+
+-- Grant execute on schema functions/procedures for evaluation
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA gym TO gym_tester;
 
 -- ----------------------------------------------------------------
 -- 3b. gym_app — full DML (SELECT, INSERT, UPDATE, DELETE)
@@ -126,11 +142,16 @@ GRANT SELECT ON ALL TABLES IN SCHEMA gym TO gym_tester;
 -- ----------------------------------------------------------------
 GRANT USAGE ON SCHEMA gym TO gym_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA gym TO gym_app;
--- Adding SEQUENCES for gym_app
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA gym TO gym_app;
--- Adding custom ENUM types for gym_app
+
+-- Grant USAGE, SELECT, and UPDATE on sequences for serial auto-increments
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA gym TO gym_app;
+
+-- Grant usage on custom ENUM types
 GRANT USAGE ON TYPE gym.recurrence_frequency TO gym_app;
 GRANT USAGE ON TYPE gym.day_of_week TO gym_app;
+
+-- Grant execute on schema functions/procedures
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA gym TO gym_app;
 
 -- ----------------------------------------------------------------
 -- 3c. gym_developer — full DML (same as app, granted independently)
@@ -143,11 +164,16 @@ GRANT USAGE ON TYPE gym.day_of_week TO gym_app;
 -- ----------------------------------------------------------------
 GRANT USAGE ON SCHEMA gym TO gym_developer;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA gym TO gym_developer;
---  Adding SEQUENCES for gym_developer
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA gym TO gym_developer;
--- Adding custom ENUM types for gym_developer
+
+-- Grant USAGE, SELECT, and UPDATE on sequences for developer manual inserts (nextval requires UPDATE)
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA gym TO gym_developer;
+
+-- Grant usage on custom ENUM types for manual testing
 GRANT USAGE ON TYPE gym.recurrence_frequency TO gym_developer;
 GRANT USAGE ON TYPE gym.day_of_week TO gym_developer;
+
+-- Grant execute on schema functions/procedures
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA gym TO gym_developer;
 
 -- ----------------------------------------------------------------
 -- 3d. gym_migration — DML + DDL (schema evolution)
@@ -165,8 +191,16 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA gym TO gym_migratio
 -- objects it creates; for pre-existing objects the database owner
 -- may need to transfer ownership or grant these explicitly.
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA gym TO gym_migration;
--- Add SEQUENCES for gym_migration
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA gym TO gym_migration;
+
+-- Grant USAGE, SELECT, and UPDATE on sequences for the migration process
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA gym TO gym_migration;
+
+-- Grant usage on custom ENUM types to allow structural updates
+GRANT USAGE ON TYPE gym.recurrence_frequency TO gym_migration;
+GRANT USAGE ON TYPE gym.day_of_week TO gym_migration;
+
+-- Grant execute on schema functions/procedures
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA gym TO gym_migration;
 
 -- ----------------------------------------------------------------
 -- 3e. gym_admin — unrestricted access
@@ -177,8 +211,14 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA gym TO gym_migration;
 -- ----------------------------------------------------------------
 GRANT ALL PRIVILEGES ON SCHEMA gym TO gym_admin;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA gym TO gym_admin;
--- Additional best practices for sequence admins
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA gym TO gym_admin;
+
+-- Grant usage on custom ENUM types to admin
+GRANT USAGE ON TYPE gym.recurrence_frequency TO gym_admin;
+GRANT USAGE ON TYPE gym.day_of_week TO gym_admin;
+
+-- Grant execute on schema functions/procedures
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA gym TO gym_admin;
 
 
 -- ================================================================
@@ -243,7 +283,13 @@ GRANT gym_tester    TO tester_user;
 -- automatically receive appropriate access without manual grants.
 -- ================================================================
 
--- Technical fix for Supabase cloud to allow modifying default privileges for this role
+-- ========== CRITICAL NOTATION FOR SUPABASE CLOUD ==========
+-- In a standard localized PostgreSQL deployment, the following ALTER DEFAULT PRIVILEGES 
+-- block would be run natively by the superuser. However, on Supabase, the 'postgres' role 
+-- lacks absolute superuser status and cannot modify default privileges for other custom roles 
+-- directly without temporary membership. 
+-- For non-Supabase environments, the 'GRANT/REVOKE migration_user TO postgres' commands may be omitted.
+
 GRANT migration_user TO postgres;
 
 -- Future tables created by migration_user: grant SELECT to testers
@@ -265,9 +311,31 @@ ALTER DEFAULT PRIVILEGES FOR ROLE migration_user IN SCHEMA gym
 ALTER DEFAULT PRIVILEGES FOR ROLE migration_user IN SCHEMA gym
     GRANT USAGE, SELECT ON SEQUENCES TO gym_developer;
 
--- Cleaning up the temporary role assignment for Supabase session security
 REVOKE migration_user FROM postgres;
-    
+
+
+-- ================================================================
+-- 8. MANUAL TEST QUERIES (VERIFICATION OUTLINE)
+-- ================================================================
+-- Run the following commands as separate connection roles to verify constraints:
+--
+-- 1) psql -U tester_user -d fitness_center_db -c "SELECT COUNT(*) FROM gym.memberships;"
+--    Expected: ✅ works (SELECT permission allowed)
+--    If you try: INSERT/UPDATE — ❌ should fail (no write access granted)
+--
+-- 2) psql -U app_user -d fitness_center_db -c "INSERT INTO gym.memberships (id, valid_from) VALUES (1, NOW());"
+--    Expected: ✅ works (DML is open, serialization identities function with sequence access)
+--
+-- 3) psql -U app_user -d fitness_center_db -c "DELETE FROM gym.memberships;"
+--    Expected: ❌ fails (DELETE privilege explicitly revoked from gym_app)
+--
+-- 4) psql -U developer_user -d fitness_center_db -c "DELETE FROM gym.memberships;"
+--    Expected: ❌ fails (DELETE privilege explicitly revoked from gym_developer)
+--
+-- 5) psql -U migration_user -d fitness_center_db -c "CREATE TABLE gym.test_table (id INT);"
+--    Expected: ✅ works (CREATE DDL privileges explicitly granted on schema)
+-- ================================================================
+
 
 -- ================================================================
 -- 9. CLEANUP
@@ -275,6 +343,7 @@ REVOKE migration_user FROM postgres;
 -- Uncomment the following statements to remove all users and roles
 -- created by this script.  Execute in this order to avoid
 -- dependency errors (users first, then roles).
+-- NOTE: Keep these commented out in production environments.
 -- ================================================================
 
 -- DROP USER IF EXISTS tester_user;
