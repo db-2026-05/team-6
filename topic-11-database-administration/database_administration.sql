@@ -60,6 +60,9 @@
 
 REVOKE ALL ON SCHEMA gym FROM PUBLIC;
 REVOKE ALL ON ALL TABLES IN SCHEMA gym FROM PUBLIC;
+-- Clearing PUBLIC privileges: add for SEQUENCES and TYPES
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA gym FROM PUBLIC;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA gym FROM PUBLIC;
 
 -- ================================================================
 -- 2. CREATE ROLES
@@ -123,6 +126,11 @@ GRANT SELECT ON ALL TABLES IN SCHEMA gym TO gym_tester;
 -- ----------------------------------------------------------------
 GRANT USAGE ON SCHEMA gym TO gym_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA gym TO gym_app;
+-- Adding SEQUENCES for gym_app
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA gym TO gym_app;
+-- Adding custom ENUM types for gym_app
+GRANT USAGE ON TYPE gym.recurrence_frequency TO gym_app;
+GRANT USAGE ON TYPE gym.day_of_week TO gym_app;
 
 -- ----------------------------------------------------------------
 -- 3c. gym_developer — full DML (same as app, granted independently)
@@ -135,6 +143,11 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA gym TO gym_app;
 -- ----------------------------------------------------------------
 GRANT USAGE ON SCHEMA gym TO gym_developer;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA gym TO gym_developer;
+--  Adding SEQUENCES for gym_developer
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA gym TO gym_developer;
+-- Adding custom ENUM types for gym_developer
+GRANT USAGE ON TYPE gym.recurrence_frequency TO gym_developer;
+GRANT USAGE ON TYPE gym.day_of_week TO gym_developer;
 
 -- ----------------------------------------------------------------
 -- 3d. gym_migration — DML + DDL (schema evolution)
@@ -152,6 +165,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA gym TO gym_migratio
 -- objects it creates; for pre-existing objects the database owner
 -- may need to transfer ownership or grant these explicitly.
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA gym TO gym_migration;
+-- Add SEQUENCES for gym_migration
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA gym TO gym_migration;
 
 -- ----------------------------------------------------------------
 -- 3e. gym_admin — unrestricted access
@@ -162,6 +177,8 @@ GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA gym TO gym_migration;
 -- ----------------------------------------------------------------
 GRANT ALL PRIVILEGES ON SCHEMA gym TO gym_admin;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA gym TO gym_admin;
+-- Additional best practices for sequence admins
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA gym TO gym_admin;
 
 
 -- ================================================================
@@ -226,6 +243,9 @@ GRANT gym_tester    TO tester_user;
 -- automatically receive appropriate access without manual grants.
 -- ================================================================
 
+-- Technical fix for Supabase cloud to allow modifying default privileges for this role
+GRANT migration_user TO postgres;
+
 -- Future tables created by migration_user: grant SELECT to testers
 ALTER DEFAULT PRIVILEGES FOR ROLE migration_user IN SCHEMA gym
     GRANT SELECT ON TABLES TO gym_tester;
@@ -237,6 +257,17 @@ ALTER DEFAULT PRIVILEGES FOR ROLE migration_user IN SCHEMA gym
 -- Future tables created by migration_user: grant full DML to developers
 ALTER DEFAULT PRIVILEGES FOR ROLE migration_user IN SCHEMA gym
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO gym_developer;
+
+-- Additional fix for future SEQUENCES so that automation doesn't break during migrations
+ALTER DEFAULT PRIVILEGES FOR ROLE migration_user IN SCHEMA gym
+    GRANT USAGE, SELECT ON SEQUENCES TO gym_app;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE migration_user IN SCHEMA gym
+    GRANT USAGE, SELECT ON SEQUENCES TO gym_developer;
+
+-- Cleaning up the temporary role assignment for Supabase session security
+REVOKE migration_user FROM postgres;
+    
 
 -- ================================================================
 -- 9. CLEANUP
