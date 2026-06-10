@@ -185,7 +185,6 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA gym TO gym_developer;
 -- objects lets the role ALTER and DROP them.
 -- ----------------------------------------------------------------
 GRANT USAGE, CREATE ON SCHEMA gym TO gym_migration;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA gym TO gym_migration;
 -- Allow the migration role to ALTER and DROP existing tables
 -- that it does not own.  In practice the migration user will own
 -- objects it creates; for pre-existing objects the database owner
@@ -196,8 +195,16 @@ GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA gym TO gym_migration;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA gym TO gym_migration;
 
 -- Grant usage on custom ENUM types to allow structural updates
+GRANT USAGE ON TYPE gym.membership_type TO gym_migration;
+GRANT USAGE ON TYPE gym.attendance_status TO gym_migration;
 GRANT USAGE ON TYPE gym.recurrence_frequency TO gym_migration;
 GRANT USAGE ON TYPE gym.day_of_week TO gym_migration;
+GRANT USAGE ON TYPE gym.class_schedule_status TO gym_migration;
+GRANT USAGE ON TYPE gym.personal_training_status TO gym_migration;
+GRANT USAGE ON TYPE gym.leave_status TO gym_migration;
+GRANT USAGE ON TYPE gym.leave_type TO gym_migration;
+GRANT USAGE ON TYPE gym.equipment_status TO gym_migration;
+GRANT USAGE ON TYPE gym.goal_status TO gym_migration;
 
 -- Grant execute on schema functions/procedures
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA gym TO gym_migration;
@@ -283,7 +290,7 @@ GRANT gym_tester    TO tester_user;
 -- automatically receive appropriate access without manual grants.
 -- ================================================================
 
--- ========== CRITICAL NOTATION FOR SUPABASE CLOUD ==========
+-- ========== CRITICAL NOTATION FOR SUPABASE ==========
 -- In a standard localized PostgreSQL deployment, the following ALTER DEFAULT PRIVILEGES 
 -- block would be run natively by the superuser. However, on Supabase, the 'postgres' role 
 -- lacks absolute superuser status and cannot modify default privileges for other custom roles 
@@ -304,7 +311,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE migration_user IN SCHEMA gym
 ALTER DEFAULT PRIVILEGES FOR ROLE migration_user IN SCHEMA gym
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO gym_developer;
 
--- Additional fix for future SEQUENCES so that automation doesn't break during migrations
+-- For future SEQUENCES so that automation doesn't break during migrations
 ALTER DEFAULT PRIVILEGES FOR ROLE migration_user IN SCHEMA gym
     GRANT USAGE, SELECT ON SEQUENCES TO gym_app;
 
