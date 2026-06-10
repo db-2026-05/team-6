@@ -7,7 +7,7 @@
 ## Таблиця внесків
 | Учасник | Роль у команді | Що зроблено | Артефакти / файли |
 |---|---|---|---|
-| Oleksandr Chura | Учасник | Views для class and schedule management | views.sql, [video](https://drive.google.com/file/d/1CWgATOnAephzEHoJdVXIAZryN2rTU7W/view?usp=sharing) |
+| Oleksandr Chura | Учасник | Views для class and schedule management | views.sql, [video](https://drive.google.com/file/d/15fmN5qjdmjrHmfZQ1TbDd4wz2qs_Zwfv/view?usp=sharing) |
 | Andrew Chernuha | Developer | Views implementation | views.sql |
 | Dmytro Tokariev | Учасник | Views implementation | views.sql |
 | Bohdan Bohelskyi | Учасник | Views for persons, trainers, specializations and trainer_specializations | views.sql |
