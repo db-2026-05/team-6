@@ -9,6 +9,7 @@
 |---|---|---|---|
 | Oleksandr Chura | Учасник | Займався загальною структурою скрипта, відповідальний за роль gym_migration і користувача migration_user | database_administration.sql, [video](https://drive.google.com/file/d/1Xx84PdJpTENb_-56_pv-tY3wu1mjzsbX/view?usp=sharing) |
 | Oleh Svyrydenko | Учасник | Вносив зміни для усунення помилок при тестувані скрипта в Supabase та відповідальний за роль gym_developer та користувача developer_user | [video](https://drive.google.com/file/d/18CHEw9nlngFEQQjxCHSiMUa-D40KxQpU/view?usp=sharing) |
+| Dmytro Tokariev | Учасник | Відповідальний за read-only роль gym.tester і користувача tester_user | database_administration.sql, (https://drive.google.com/file/d/1Sc_La-UmgmBgLXevgZ_JOrwb8kQM0IJz/view?usp=sharing) |
 | ... | ... | ... | ... |
 
 ## Контекст теми
