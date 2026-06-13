@@ -289,3 +289,285 @@ $$;
 
 -- Verify: attendance rate should now reflect the check-in
 -- SELECT gym.get_member_attendance_rate(1) AS attendance_rate_after_checkin;
+
+
+--Andrew Chernuha
+-- FUNCTIONS
+-- =========================================================
+ 
+ 
+-- ---------------------------------------------------------
+-- FUNCTION 1: gym.fn_count_trainer_sessions
+--
+-- Purpose  : Returns total number of sessions for a trainer.
+-- Parameter: p_trainer_id — trainer to query
+-- Returns  : INTEGER — session count
+--
+-- Example:
+--   SELECT gym.fn_count_trainer_sessions(1);
+-- ---------------------------------------------------------
+CREATE OR REPLACE FUNCTION gym.fn_count_trainer_sessions(
+    p_trainer_id BIGINT
+)
+RETURNS INTEGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_count INTEGER;
+BEGIN
+    SELECT COUNT(*)
+    INTO v_count
+    FROM gym.personal_training
+    WHERE trainer_id = p_trainer_id;
+ 
+    RETURN v_count;
+END;
+$$;
+ 
+ 
+-- ---------------------------------------------------------
+-- FUNCTION 2: gym.fn_is_trainer_available
+--
+-- Purpose  : Checks if a trainer has no session at a given time.
+-- Parameters:
+--   p_trainer_id    — trainer to check
+--   p_training_date — proposed datetime
+-- Returns  : BOOLEAN — TRUE if available, FALSE if not
+--
+-- Example:
+--   SELECT gym.fn_is_trainer_available(1, '2024-07-01 10:00:00+00');
+-- ---------------------------------------------------------
+CREATE OR REPLACE FUNCTION gym.fn_is_trainer_available(
+    p_trainer_id    BIGINT,
+    p_training_date TIMESTAMPTZ
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_count INTEGER;
+BEGIN
+    SELECT COUNT(*)
+    INTO v_count
+    FROM gym.personal_training
+    WHERE trainer_id    = p_trainer_id
+      AND training_date = p_training_date
+      AND status        = 'scheduled';
+ 
+    RETURN v_count = 0;
+END;
+$$;
+ 
+ 
+-- ---------------------------------------------------------
+-- FUNCTION 3: gym.fn_trainer_weekly_hours
+--
+-- Purpose  : Calculates total active working hours per week.
+-- Parameter: p_trainer_id — trainer to calculate for
+-- Returns  : NUMERIC — total hours (e.g. 45.00)
+--
+-- Example:
+--   SELECT gym.fn_trainer_weekly_hours(1);
+-- ---------------------------------------------------------
+CREATE OR REPLACE FUNCTION gym.fn_trainer_weekly_hours(
+    p_trainer_id BIGINT
+)
+RETURNS NUMERIC
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_hours NUMERIC;
+BEGIN
+    SELECT COALESCE(
+        SUM(EXTRACT(EPOCH FROM (end_time - start_time)) / 3600),
+        0
+    )
+    INTO v_hours
+    FROM gym.trainer_work_schedule
+    WHERE trainer_id = p_trainer_id
+      AND is_active  = TRUE;
+ 
+    RETURN ROUND(v_hours, 2);
+END;
+$$;
+ 
+ 
+-- =========================================================
+-- STORED PROCEDURES — SELECT
+-- =========================================================
+ 
+ 
+-- ---------------------------------------------------------
+-- PROCEDURE 1: gym.sp_get_trainer_sessions
+--
+-- Purpose  : Prints a notice with session count for a trainer.
+-- Parameter: p_trainer_id — trainer to query
+--
+-- Example:
+--   CALL gym.sp_get_trainer_sessions(1);
+-- ---------------------------------------------------------
+CREATE OR REPLACE PROCEDURE gym.sp_get_trainer_sessions(
+    p_trainer_id BIGINT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_count INTEGER;
+BEGIN
+    SELECT COUNT(*)
+    INTO v_count
+    FROM gym.personal_training
+    WHERE trainer_id = p_trainer_id;
+ 
+    RAISE NOTICE 'Trainer % has % session(s).', p_trainer_id, v_count;
+END;
+$$;
+ 
+ 
+-- ---------------------------------------------------------
+-- PROCEDURE 2: gym.sp_get_pending_leaves
+--
+-- Purpose  : Prints a notice with count of pending leave requests.
+--
+-- Example:
+--   CALL gym.sp_get_pending_leaves();
+-- ---------------------------------------------------------
+CREATE OR REPLACE PROCEDURE gym.sp_get_pending_leaves()
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_count INTEGER;
+BEGIN
+    SELECT COUNT(*)
+    INTO v_count
+    FROM gym.trainer_leaves
+    WHERE status = 'pending';
+ 
+    RAISE NOTICE 'Pending leave requests: %', v_count;
+END;
+$$;
+ 
+ 
+-- =========================================================
+-- STORED PROCEDURES — INSERT
+-- =========================================================
+ 
+ 
+-- ---------------------------------------------------------
+-- PROCEDURE 3: gym.sp_book_session
+--
+-- Purpose  : Books a new personal training session.
+-- Parameters:
+--   p_member_id     — member booking the session
+--   p_trainer_id    — trainer for the session
+--   p_training_date — date and time of the session
+--
+-- Example:
+--   CALL gym.sp_book_session(1, 2, '2024-07-01 10:00:00+00');
+-- ---------------------------------------------------------
+CREATE OR REPLACE PROCEDURE gym.sp_book_session(
+    p_member_id     BIGINT,
+    p_trainer_id    BIGINT,
+    p_training_date TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    INSERT INTO gym.personal_training (member_id, trainer_id, training_date, status)
+    VALUES (p_member_id, p_trainer_id, p_training_date, 'scheduled');
+ 
+    RAISE NOTICE 'Session booked for member % with trainer % on %.',
+        p_member_id, p_trainer_id, p_training_date;
+END;
+$$;
+ 
+ 
+-- ---------------------------------------------------------
+-- PROCEDURE 4: gym.sp_submit_leave
+--
+-- Purpose  : Submits a new leave request with status 'pending'.
+-- Parameters:
+--   p_trainer_id — trainer requesting leave
+--   p_leave_type — 'sick', 'vacation', or 'personal'
+--   p_start_date — first day of leave
+--   p_end_date   — last day of leave
+--
+-- Example:
+--   CALL gym.sp_submit_leave(1, 'vacation', '2024-08-01', '2024-08-10');
+-- ---------------------------------------------------------
+CREATE OR REPLACE PROCEDURE gym.sp_submit_leave(
+    p_trainer_id BIGINT,
+    p_leave_type TEXT,
+    p_start_date DATE,
+    p_end_date   DATE
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    INSERT INTO gym.trainer_leaves (trainer_id, leave_type, start_date, end_date, status)
+    VALUES (
+        p_trainer_id,
+        p_leave_type::gym.leave_type,
+        p_start_date,
+        p_end_date,
+        'pending'
+    );
+ 
+    RAISE NOTICE 'Leave request submitted for trainer % (% to %).',
+        p_trainer_id, p_start_date, p_end_date;
+END;
+$$;
+ 
+ 
+-- =========================================================
+-- STORED PROCEDURES — UPDATE
+-- =========================================================
+ 
+ 
+-- ---------------------------------------------------------
+-- PROCEDURE 5: gym.sp_cancel_session
+--
+-- Purpose  : Cancels a personal training session by ID.
+-- Parameter: p_session_id — session to cancel
+--
+-- Example:
+--   CALL gym.sp_cancel_session(1);
+-- ---------------------------------------------------------
+CREATE OR REPLACE PROCEDURE gym.sp_cancel_session(
+    p_session_id BIGINT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE gym.personal_training
+    SET status = 'cancelled'
+    WHERE session_id = p_session_id;
+ 
+    RAISE NOTICE 'Session % has been cancelled.', p_session_id;
+END;
+$$;
+ 
+ 
+-- ---------------------------------------------------------
+-- PROCEDURE 6: gym.sp_approve_leave
+--
+-- Purpose  : Approves a leave request by ID.
+-- Parameter: p_leave_id — leave request to approve
+--
+-- Example:
+--   CALL gym.sp_approve_leave(1);
+-- ---------------------------------------------------------
+CREATE OR REPLACE PROCEDURE gym.sp_approve_leave(
+    p_leave_id BIGINT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE gym.trainer_leaves
+    SET status = 'approved'
+    WHERE leave_id = p_leave_id;
+ 
+    RAISE NOTICE 'Leave request % has been approved.', p_leave_id;
+END;
+$$;
+--End Andrew Chernuha
