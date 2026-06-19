@@ -571,3 +571,130 @@ BEGIN
 END;
 $$;
 --End Andrew Chernuha
+
+-- ================================================================
+-- FUNCTIONS & PROCEDURES FOR MEMBERSHIP MANAGEMENT
+-- Responsible: Oleh Svyrydenko
+-- ================================================================
+
+-- ----------------------------------------------------------------
+-- FUNCTION: gym.fn_calculate_membership_revenue
+-- Purpose  : Calculates total revenue from a membership type based on valid_from date
+-- ----------------------------------------------------------------
+CREATE OR REPLACE FUNCTION gym.fn_calculate_membership_revenue(
+    p_membership_type gym.membership_type,
+    p_start_date DATE,
+    p_end_date DATE
+)
+RETURNS NUMERIC
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_total_revenue NUMERIC := 0.00;
+BEGIN
+    IF p_start_date > p_end_date THEN
+        RAISE EXCEPTION 'Start date (%) cannot be later than end date (%)', p_start_date, p_end_date;
+    END IF;
+
+    SELECT COALESCE(SUM(price), 0.00)
+    INTO v_total_revenue
+    FROM gym.memberships
+    WHERE type = p_membership_type
+      AND valid_from BETWEEN p_start_date AND p_end_date;
+
+    RETURN v_total_revenue;
+END;
+$$;
+
+-- ----------------------------------------------------------------
+-- PROCEDURE: gym.sp_purchase_membership
+-- Purpose  : Registers a new membership enrollment for a member
+-- ----------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE gym.sp_purchase_membership(
+    p_member_id BIGINT,
+    p_membership_id BIGINT,
+    p_discount INT DEFAULT 0
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF p_discount < 0 OR p_discount > 100 THEN
+        RAISE EXCEPTION 'Discount must be between 0 and 100 percent.';
+    END IF;
+
+    INSERT INTO gym.members_memberships (
+        membership_id,
+        member_id, 
+        start_date, 
+        end_date, 
+        discount
+    )
+    VALUES (
+        p_membership_id,
+        p_member_id, 
+        CURRENT_DATE, 
+        NULL, 
+        p_discount
+    );
+
+    RAISE NOTICE 'Membership ID % successfully purchased for member ID %.', p_membership_id, p_member_id;
+
+EXCEPTION
+    WHEN foreign_key_violation THEN
+        RAISE EXCEPTION 'Error: Member ID % or Membership ID % does not exist.', p_member_id, p_membership_id;
+    WHEN OTHERS THEN
+        RAISE EXCEPTION 'An unexpected error occurred: %', SQLERRM;
+END;
+$$;
+
+
+-- ----------------------------------------------------------------
+-- PROCEDURE: gym.sp_terminate_membership
+-- Purpose  : Closes an active membership by setting its end_date
+-- ----------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE gym.sp_terminate_membership(
+    p_members_membership_id BIGINT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_rows_updated INT;
+BEGIN
+    UPDATE gym.members_memberships
+    SET end_date = CURRENT_DATE
+    WHERE members_membership_id = p_members_membership_id
+      AND end_date IS NULL;
+
+    GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
+
+    IF v_rows_updated = 0 THEN
+        RAISE NOTICE 'No active enrollment found with ID % or it is already closed.', p_members_membership_id;
+    ELSE
+        RAISE NOTICE 'Enrollment % has been successfully terminated.', p_members_membership_id;
+    END IF;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE EXCEPTION 'An error occurred while terminating enrollment %: %', p_members_membership_id, SQLERRM;
+END;
+$$;
+
+-- ================================================================
+-- TEST CALLS FOR MEMBERSHIP MANAGEMENT (OLEH SVYRYDENKO)
+-- ================================================================
+
+-- STEP 1: Test Purchasing a Membership (Successful Scenario)
+-- Expected behavior: Inserts a new active record into gym.members_memberships for member_id = 1 and membership_id = 3.
+-- CALL gym.sp_purchase_membership(1, 3, 0);
+
+-- STEP 2: Test Revenue Calculation Function
+-- Expected behavior: Returns the total revenue for 'monthly' membership type within the specified period, including the newly purchased one.
+--- SELECT gym.fn_calculate_membership_revenue('monthly', '2023-01-01', '2026-12-31') AS total_revenue;
+
+-- STEP 3: Test Purchasing a Membership (Error Scenario - Non-existent Member)
+-- Expected behavior: Catches foreign_key_violation and raises a custom exception.
+-- CALL gym.sp_purchase_membership(99999, 3, 0);
+
+-- STEP 4: Test Terminating a Membership (Soft Delete Scenario)
+-- Expected behavior: Updates the end_date to CURRENT_DATE for the specified enrollment record (members_membership_id = 1).
+-- CALL gym.sp_terminate_membership(1);
