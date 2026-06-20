@@ -10,6 +10,7 @@
 | Oleksandr Chura | учасник | Створив функцію `gym.get_member_attendance_rate`, процедуру `gym.book_class_session`, процедуру `gym.check_in_member` | functions_stored_procedures.sql [video](https://drive.google.com/file/d/1YKJf8pqd3zKo7rnRG1wgiKRRSGWNo0q-/view?usp=sharing) |
 | Andrew Chernuha | developer | fn_count_trainer_sessions, fn_is_trainer_available, sp_get_trainer_sessions, sp_submit_leave, sp_cancel_session, functions_stored_procedures.sql | [video](https://www.loom.com/share/e9c6342a8ecf4b899e811b94c5f311ce) |
 | Oleh Svyrydenko | учасник | Створив функцію `gym.fn_calculate_membership_revenue`,  процедури `gym.sp_purchase_membership`, `gym.sp_terminate_membership`| functions_stored_procedures.sql [video](https://drive.google.com/file/d/17EstxGaZ4uHJ0yPjgAJ-rVfoYrjqMsaU/view?usp=sharing) |
+| Dmytro Tokariev | Учасник | Створив відповідні функції та процедури | functions_stored_procedures.sql|
 | ... | ... | ... | ... |
 
 ## Контекст теми
