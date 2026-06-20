@@ -698,3 +698,231 @@ $$;
 -- STEP 4: Test Terminating a Membership (Soft Delete Scenario)
 -- Expected behavior: Updates the end_date to CURRENT_DATE for the specified enrollment record (members_membership_id = 1).
 -- CALL gym.sp_terminate_membership(1);
+
+-- ================================================================
+-- FUNCTIONS & STORED PROCEDURES for Equipment and Goal Tracking
+-- Author:   Dmytro
+-- Tables:   equipment, goals, progress
+
+-- ================================================================
+-- SECTION 1: FUNCTIONS
+-- ================================================================
+
+-- ----------------------------------------------------------------
+-- FUNCTION 1: Count total equipment by status
+-- Purpose: Get count of equipment with specific status
+-- Parameter: status_filter - equipment status (e.g., 'available')
+-- Returns: Number of equipment items with that status
+-- ----------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION gym.count_equipment_by_status(status_filter VARCHAR)
+RETURNS INTEGER AS $$
+DECLARE
+    total_count INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO total_count
+    FROM gym.equipment
+    WHERE status = status_filter::gym.equipment_status;
+    
+    RETURN total_count;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ----------------------------------------------------------------
+-- FUNCTION 2: Get goal progress percentage
+-- Purpose: Calculate how close a goal is to completion (0-100%)
+-- Parameter: goal_id - ID of the goal
+-- Returns: Progress percentage (0-100), or 0 if no progress/error
+-- ----------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION gym.get_goal_progress_percentage(goal_id_param BIGINT)
+RETURNS NUMERIC AS $$
+DECLARE
+    v_latest_state_raw TEXT;
+    v_target_value_raw TEXT;
+    v_latest_state_numeric NUMERIC := 0;
+    v_target_value_numeric NUMERIC := 0;
+    v_percentage NUMERIC;
+BEGIN
+    
+    SELECT p.current_state
+    INTO v_latest_state_raw
+    FROM gym.progress p
+    WHERE p.goal_id = goal_id_param
+    ORDER BY p.check_date DESC
+    LIMIT 1;
+
+    SELECT target_value 
+    INTO v_target_value_raw
+    FROM gym.goals
+    WHERE goal_id = goal_id_param;
+
+    IF v_latest_state_raw IS NOT NULL THEN
+        BEGIN
+            v_latest_state_numeric := regexp_replace(
+                replace(v_latest_state_raw, ',', '.'), 
+                '[^0-9.]', '', 'g'
+            )::NUMERIC;
+        EXCEPTION WHEN invalid_text_representation THEN
+            v_latest_state_numeric := 0;
+        END;
+    END IF;
+
+    IF v_target_value_raw IS NOT NULL THEN
+        BEGIN
+            v_target_value_numeric := regexp_replace(
+                replace(v_target_value_raw, ',', '.'), 
+                '[^0-9.]', '', 'g'
+            )::NUMERIC;
+        EXCEPTION WHEN invalid_text_representation THEN
+            v_target_value_numeric := 0;
+        END;
+    END IF;
+
+    IF v_target_value_numeric = 0 OR v_latest_state_numeric IS NULL THEN
+        RETURN 0;
+    ELSE
+        v_percentage := (v_latest_state_numeric / v_target_value_numeric) * 100;
+        RETURN ROUND(v_percentage, 2);
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- ----------------------------------------------------------------
+-- FUNCTION 3: Get equipment maintenance status
+-- Purpose: Check if equipment needs maintenance (last_maintenance > 6 months ago)
+-- Parameter: equipment_id - ID of equipment
+-- Returns: 'MAINTENANCE NEEDED' or 'OK'
+-- ----------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION gym.check_equipment_maintenance(equipment_id_param BIGINT)
+RETURNS VARCHAR AS $$
+DECLARE
+    last_maintenance_date DATE;
+BEGIN
+    SELECT last_maintenance INTO last_maintenance_date
+    FROM gym.equipment
+    WHERE equipment_id = equipment_id_param;
+    
+    IF last_maintenance_date IS NULL THEN
+        RETURN 'MAINTENANCE NEEDED';
+    ELSIF last_maintenance_date < CURRENT_DATE - INTERVAL '180 days' THEN
+        RETURN 'MAINTENANCE NEEDED';
+    ELSE
+        RETURN 'OK';
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- ================================================================
+-- SECTION 2: STORED PROCEDURES 
+-- ================================================================
+
+-- ----------------------------------------------------------------
+-- PROCEDURE 1: Add new equipment (INSERT)
+-- Purpose: Insert new equipment into inventory
+-- Parameters: equipment_name, equipment_status, maintenance_date
+-- ----------------------------------------------------------------
+
+CREATE OR REPLACE PROCEDURE gym.add_equipment(
+    p_name VARCHAR,
+    p_status VARCHAR,
+    p_last_maintenance DATE DEFAULT NULL
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    INSERT INTO gym.equipment (name, status, last_maintenance)
+    VALUES (p_name, p_status::gym.equipment_status, p_last_maintenance);
+    
+    RAISE NOTICE 'Equipment "%" added successfully.', p_name;
+END;
+$$;
+
+
+-- ----------------------------------------------------------------
+-- PROCEDURE 2: Add progress record (INSERT)
+-- Purpose: Log a new progress check-in for a goal
+-- Parameters: goal_id, current_value, notes (optional)
+-- ----------------------------------------------------------------
+
+CREATE OR REPLACE PROCEDURE gym.add_progress_record(
+    p_goal_id BIGINT, -- Изменено на BIGINT для консистентности
+    p_current_state VARCHAR,
+    p_notes TEXT DEFAULT NULL
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    INSERT INTO gym.progress (goal_id, current_state, notes, check_date)
+    VALUES (p_goal_id, p_current_state, p_notes, CURRENT_DATE);
+    
+    RAISE NOTICE 'Progress record added for goal %.', p_goal_id;
+END;
+$$;
+
+
+-- ----------------------------------------------------------------
+-- PROCEDURE 3: Update equipment status (UPDATE)
+-- Purpose: Change status of equipment (e.g., after repair)
+-- Parameters: equipment_id, new_status
+-- ----------------------------------------------------------------
+
+CREATE OR REPLACE PROCEDURE gym.update_equipment_status(
+    p_equipment_id BIGINT, -- Изменено на BIGINT для консистентности
+    p_new_status VARCHAR
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE gym.equipment
+    SET status = p_new_status::gym.equipment_status
+    WHERE equipment_id = p_equipment_id;
+    
+    RAISE NOTICE 'Equipment % status updated to %.', p_equipment_id, p_new_status;
+END;
+$$;
+
+
+-- ----------------------------------------------------------------
+-- PROCEDURE 4: Update goal status (UPDATE)
+-- Purpose: Change status of a goal (e.g., mark as completed)
+-- Parameters: goal_id, new_status
+-- ----------------------------------------------------------------
+
+CREATE OR REPLACE PROCEDURE gym.update_goal_status(
+    p_goal_id BIGINT, -- Изменено на BIGINT для консистентности
+    p_new_status VARCHAR
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE gym.goals
+    SET status = p_new_status::gym.goal_status
+    WHERE goal_id = p_goal_id;
+    
+    RAISE NOTICE 'Goal % status updated to %.', p_goal_id, p_new_status;
+END;
+$$;
+
+
+-- ================================================================
+-- SECTION 3: TEST CALLS
+-- ================================================================
+
+-- Test Functions:
+-- SELECT gym.count_equipment_by_status('available');
+-- SELECT gym.get_goal_progress_percentage(1);
+-- SELECT gym.check_equipment_maintenance(1);
+
+-- Test Procedures:
+-- CALL gym.add_equipment('Test Treadmill', 'available', '2026-01-01');
+-- CALL gym.add_progress_record(1, '74.5 kg', 'Good progress');
+-- CALL gym.update_equipment_status(1, 'under_repair');
+-- CALL gym.update_goal_status(1, 'completed');
+
+-- ================================================================
+-- END OF Dmytro SCRIPT
+-- ================================================================
